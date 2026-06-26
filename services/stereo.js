@@ -52,4 +52,14 @@ export async function runStereoAction(action, param) {
   return zone[action](param);
 }
 
+export async function runRawStereoCommand({ name, param = '', hasResponse = false }) {
+  const { client, config } = await getClient();
+  return client.sendRawCommand({
+    name,
+    zone: config.zone,
+    param,
+    hasResponse,
+  });
+}
+
 export { loadStereoConfig, saveStereoConfig } from './stereoConfig';

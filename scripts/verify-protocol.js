@@ -15,7 +15,10 @@ function runModule(relativePath, transform, globals = {}) {
 
 const { ACTIONS } = runModule(
   'lib/hkapi/actions.js',
-  (source) => source.replace('export const ACTIONS =', 'exports.ACTIONS ='),
+  (source) =>
+    source
+      .replace('export const ACTIONS =', 'exports.ACTIONS =')
+      .replace('export const KNOWN_SOURCE_LABELS =', 'exports.KNOWN_SOURCE_LABELS ='),
 );
 
 const { TEMPLATES } = runModule(
@@ -54,6 +57,7 @@ const fixtures = [
   { action: 'selectSource', zone: 'Main Zone', param: 'Disc' },
   { action: 'on', zone: 'Main Zone' },
   { action: 'heartAlive', zone: 'Main Zone' },
+  { rawName: 'harman-volume', zone: 'Main Zone', param: 'Low' },
 ];
 
 const client = new HKClient({
@@ -65,7 +69,20 @@ const client = new HKClient({
   },
 });
 
-const output = fixtures.map(({ action, zone, param }) => {
+const output = fixtures.map(({ action, rawName, zone, param }) => {
+  if (rawName) {
+    const body = generateRequest(rawName, zone, param ?? '', client.device.template);
+
+    return {
+      action: 'raw',
+      rawName,
+      zone,
+      param: param ?? null,
+      body,
+      payload: client.buildPayload(body),
+    };
+  }
+
   const actionConfig = ACTIONS[action];
   const body = generateRequest(
     actionConfig.name,

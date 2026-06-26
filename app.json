@@ -15,7 +15,11 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zkatancik.otoha",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Otoha needs local network access to control your Harman Kardon stereo on your Wi-Fi network."
+      }
     },
     "android": {
       "adaptiveIcon": {

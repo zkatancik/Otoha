@@ -100,7 +100,7 @@ with tempfile.TemporaryDirectory() as folder, http.server.ThreadingHTTPServer((h
         threading.Thread(target=server.serve_forever, daemon=True).start()
     files = ["HarmanProtocol", "HarmanNetwork", "LocalNetwork", "BroadLink", "LocalInfrared", "Remote"]
     binary = Path(folder) / "check"
-    shutil.copy(root / "server/receiver-profiles.json", folder)
+    shutil.copy(root / "ios/Otoha/receiver-profiles.json", folder)
     subprocess.run(["xcrun", "swiftc", "-o", str(binary), *[str(root / f"ios/Otoha/{name}.swift") for name in files],
                     str(Path(__file__).with_name("DirectRemoteCheck.swift"))], check=True)
     subprocess.run([str(binary), host, str(web.server_port), str(ir.server_address[1])], check=True, timeout=40)

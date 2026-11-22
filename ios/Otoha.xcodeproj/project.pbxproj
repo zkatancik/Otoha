@@ -4,7 +4,7 @@ archiveVersion = 1;
 classes = {};
 objectVersion = 56;
 objects = {
-37850669FFC54E4587333976 = { isa = PBXFileReference; lastKnownFileType = text.json; path = ../../server/receiver-profiles.json; sourceTree = "<group>"; };
+37850669FFC54E4587333976 = { isa = PBXFileReference; lastKnownFileType = text.json; path = receiver-profiles.json; sourceTree = "<group>"; };
 01FA13E1A3B544ABA4E4756A = { isa = PBXBuildFile; fileRef = 37850669FFC54E4587333976; };
 46B60641BD1E44ABA18EF647 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalInfrared.swift; sourceTree = "<group>"; };
 E6D37A533537486C891CD7C9 = { isa = PBXBuildFile; fileRef = 46B60641BD1E44ABA18EF647; };

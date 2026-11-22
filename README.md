@@ -12,7 +12,7 @@ Otoha remembers the stereo on this iPhone. To change it, open **Settings → Loc
 
 ## Away from home
 
-The current iPhone app controls the stereo on your home network only. For access over cellular, the legacy browser remote works through Tailscale while the home bridge is running. The separate HTTPS gateway serves older iPhone builds that support pairing. [Legacy bridge setup](tools/legacy-bridge/README.md#run-at-login-on-a-mac)
+The current direct-control build works while the iPhone is on the same network as the stereo.
 
 ## Optional infrared wake
 

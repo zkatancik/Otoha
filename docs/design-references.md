@@ -10,11 +10,11 @@ Reviewed November 22, 2026. Three recent Awwwards Sites of the Day informed the 
 
 ## Hardware portraits
 
-Open [the design board](../design/equipment-board.jpg) for the linked HK 3770 and RM mini 3 at their relative sizes and a selection of other enclosures. [Otoha Hardware.blend](../design/Otoha%20Hardware.blend) opens on that pairing. Choose a product in Blender’s scene selector to edit its individual parts, typography, lights and portrait camera. The [GLBs](../design/models/) use metres. The browser and iPhone load the same transparent portrait of each GLB.
+Open [the design board](../design/equipment-board.jpg) for the linked HK 3770 and RM mini 3 at their relative sizes and a selection of other enclosures. [Otoha Hardware.blend](../design/Otoha%20Hardware.blend) opens on that pairing. Choose a product in Blender’s scene selector to edit its individual parts, typography, lights and portrait camera. The [GLBs](../design/models/) use metres. The iPhone uses a transparent portrait of each GLB.
 
 ### Model coverage and references
 
-The catalog follows the [network profiles](../server/profiles.js), the bridge’s five iTach beacon names, the Bonjour driver and the pinned BroadLink driver. Every accepted Harman Kardon label resolves to artwork. A slash-paired AVR name uses the first region’s fascia. A BDS package shows its head unit, with separate white renders for 7773W, 480W and 780W. G3 announcements use the shared G3 front panel. The silhouettes, finishes and visible connectors are visual approximations for the camera on the remote.
+The [artwork catalog](../design/hardware_catalog.py) lists receivers, speakers and infrared blasters. Every accepted Harman Kardon label resolves to artwork. A slash-paired AVR name uses the first region’s fascia. A BDS package shows its head unit, with separate white renders for 7773W, 480W and 780W. G3 announcements use the shared G3 front panel. The silhouettes, finishes and visible connectors are visual approximations for the camera on the remote.
 
 | Hardware | What informed the model |
 | --- | --- |

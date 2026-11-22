@@ -12,7 +12,7 @@ Otoha remembers the stereo on this iPhone. To change it, open **Settings → Loc
 
 ## Optional infrared wake
 
-Some stereos stop listening to Wi-Fi commands in standby. For the HK 3770, a supported Wi-Fi infrared blaster can send the original remote’s On signal. Set up the blaster on your home Wi-Fi using its manufacturer’s phone app, aim it at the receiver, then open **Power → Set up infrared wake** in Otoha. [Blaster instructions](docs/infrared-wake.md)
+Try **Power on** over Wi-Fi first. If your HK 3770 responds to Otoha while awake but only its handset wakes it from standby, open **Power → Power on troubleshooting**. Otoha can use a compatible infrared blaster to send the handset’s On signal for that model. [Blaster instructions](docs/infrared-wake.md) · [Standby behavior by model](docs/standby-wake.md)
 
 ## Personalize your remote
 

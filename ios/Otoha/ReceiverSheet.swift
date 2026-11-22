@@ -110,7 +110,7 @@ struct ReceiverSheet: View {
           }
         case .power:
           Section {
-            if remote.receiver?.speaker != true {
+            if remote.canWake {
               actionRow(
                 "Power on",
                 remote.receiver?.irWake == true ? "Infrared blaster" : "Try network wake",
@@ -120,18 +120,14 @@ struct ReceiverSheet: View {
             if remote.receiver?.speaker != true {
               actionRow("Sleep timer", "Advance the receiver timer", "timer", "sleep")
             }
-          } footer: {
-            Text(
-              "If standby switches off Ethernet, wake the receiver with its On button or a linked infrared blaster."
-            )
           }
           if let setup = remote.receiver?.infrared {
             NavigationLink {
               InfraredSettings(receiverId: setup.receiverId)
             } label: {
               Label(
-                remote.receiver?.irWake == true ? "Infrared wake" : "Set up infrared wake",
-                systemImage: "dot.radiowaves.left.and.right")
+                remote.receiver?.irWake == true ? "Infrared wake" : "Power on troubleshooting",
+                systemImage: remote.receiver?.irWake == true ? "dot.radiowaves.left.and.right" : "questionmark.circle")
             }
           }
         }
@@ -255,6 +251,7 @@ private struct InfraredSettings: View {
   @EnvironmentObject private var remote: Remote
   @State private var error = ""
   @State private var confirmForget = false
+  @State private var confirmedHandsetWake = false
   @State private var searchTask: Task<Void, Never>?
 
   private func submit(_ action: String, id: String? = nil) {
@@ -306,6 +303,12 @@ private struct InfraredSettings: View {
             }
             Button("Search again") { submit("search") }
           }
+        case "idle" where !confirmedHandsetWake:
+          Section {
+            Text("First check that volume works from Otoha while your HK 3770 is on. Put the receiver in standby, then try Power on from Otoha while your iPhone is on the same Wi-Fi.")
+            Text("If the receiver stays in standby, try the On button on its original handset.")
+            Button("Wi-Fi wake failed, but the handset worked") { confirmedHandsetWake = true }
+          }
         default:
           Section {
             Text("An infrared blaster can wake your HK 3770 the same way its original remote does. Plug the blaster in, connect it to your home network, and point it at the front of the stereo.")
@@ -334,7 +337,7 @@ private struct InfraredSettings: View {
     }
     .disabled(remote.busy)
     .onDisappear { searchTask?.cancel() }
-    .navigationTitle("Infrared wake")
+    .navigationTitle(confirmedHandsetWake || remote.receiver?.irWake == true ? "Infrared wake" : "Power on troubleshooting")
     .navigationBarTitleDisplayMode(.inline)
   }
 }

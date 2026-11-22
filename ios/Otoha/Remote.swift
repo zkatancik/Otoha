@@ -32,7 +32,7 @@ struct Receiver {
   @Published private(set) var feedback: String?
   @Published private(set) var pulse = 0
   var activity: String { receiver.map { $0.online ? "Connected" : "Stereo offline" } ?? "Choose your stereo" }
-  var canWake: Bool { receiver?.online == true || receiver?.irWake == true }
+  var canWake: Bool { receiver?.actions.contains("wake") == true || receiver?.irWake == true }
 
   private let discover: () async throws -> [HKDevice]
   private let defaults: UserDefaults
@@ -75,7 +75,8 @@ struct Receiver {
     guard let profile = HarmanCatalog.shared.profiles[device.profile] else { return nil }
     var result = Receiver(device: device, sources: profile.sources.filter { device.model != "HK 3700" || $0.id != "bluetooth" },
                           actions: profile.keys.keys.filter { device.model == "HK 3770" || $0 != "harman" })
-    if device.model == "HK 3770" {
+    // The bundled discrete infrared On signal is for this receiver only.
+    if device.profile == "stereo", device.model == "HK 3770" {
       let ir = blaster(for: device)
       let label = ir?.label
       result.infrared = InfraredStatus(receiverId: device.id, phase: label == nil ? "idle" : "linked", label: label)
@@ -157,19 +158,19 @@ struct Receiver {
     // A sleeping receiver can be offline for hours. Keep its remote and IR wake available.
     guard Date().timeIntervalSince(lastSearch) >= 90 else { return }
     lastSearch = Date()
-    var match: HKDevice?
-    if let url = saved.descriptionURL, let device = try? await HarmanNetwork.describe(url),
-       device.id == saved.id, device.model == saved.model { match = device }
-    if match == nil {
-      match = try? await discover().first { $0.id == saved.id && $0.model == saved.model }
-    }
-    guard let match, version == epoch, !Task.isCancelled, await HarmanNetwork.online(match),
+    guard let match = await identify(saved), version == epoch, !Task.isCancelled, await HarmanNetwork.online(match),
           version == epoch, !Task.isCancelled else { return }
     try? accept(match)
   }
 
+  private func identify(_ saved: HKDevice) async -> HKDevice? {
+    if let url = saved.descriptionURL, let device = try? await HarmanNetwork.describe(url),
+       device.id == saved.id, device.model == saved.model { return device }
+    return try? await discover().first { $0.id == saved.id && $0.model == saved.model }
+  }
+
   @discardableResult func send(_ action: String, _ value: String? = nil) async -> Bool {
-    guard !busy, let state = receiver, state.online || (action == "wake" && state.irWake) else { return false }
+    guard !busy, let state = receiver, state.online || (action == "wake" && canWake) else { return false }
     if action == "louder" || action == "quieter" {
       guard volumeStep == nil else { return false }
       let step = Task { await perform(action, value, state: state) }
@@ -192,12 +193,20 @@ struct Receiver {
     let version = epoch
     var message = "Command sent."
     do {
-      if action == "wake", let ir = blaster(for: device) {
+      if action == "wake", state.irWake, let ir = blaster(for: device) {
         if ir.kind == .itach { notify("Looking for your iTach. This can take a minute.") }
         let current = try await DirectInfrared.resolve(ir)
         try check(version)
         try await DirectInfrared.operate(current, send: true)
         message = "Infrared On signal sent."
+      } else if action == "wake", let key = profile.keys["wake"] {
+        // A sleeping receiver may answer its descriptor before it answers a heartbeat.
+        // Reidentify an offline target before sending to a potentially reassigned address.
+        let target = state.online ? device : await identify(device)
+        try check(version)
+        guard let target else { throw RemoteError("Couldn’t find this receiver on Wi-Fi to send Power on.") }
+        _ = try await HarmanNetwork.transmit(target, packets: [profile.packet(key)])
+        message = "Power on sent over Wi-Fi. Check the receiver."
       } else if action == "sync-mode" || action == "set-mode" {
         guard device.model == "HK 3770", let value, let target = Self.modes.firstIndex(of: value) else { return false }
         if action == "set-mode" {
@@ -243,7 +252,8 @@ struct Receiver {
   }
 
   func configureInfrared(_ action: String, receiverId: String, id: String? = nil) async throws {
-    guard !busy, volumeStep == nil, let device = receiver?.device, device.id == receiverId, device.model == "HK 3770" else {
+    guard !busy, volumeStep == nil, receiver?.infrared?.receiverId == receiverId,
+          let device = receiver?.device, device.id == receiverId else {
       throw RemoteError("Open infrared setup for your HK 3770 again.")
     }
     busy = true

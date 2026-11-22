@@ -328,9 +328,9 @@ struct RemoteView: View {
         Image(systemName: "power").foregroundStyle(Palette.ember).accessibilityHidden(true)
         Text("Power").font(.subheadline.bold())
         Spacer(minLength: 2)
-        if !device.speaker {
+        if remote.canWake {
           Button("On") { Task { await remote.send("wake") } }
-            .disabled(!remote.canWake || remote.busy).accessibilityLabel("Power on")
+            .disabled(remote.busy).accessibilityLabel("Power on")
         }
         Button("Standby") { Task { await remote.send("standby") } }.disabled(!canControl)
         Button {

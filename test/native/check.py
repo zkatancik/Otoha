@@ -105,5 +105,5 @@ with tempfile.TemporaryDirectory() as folder, http.server.ThreadingHTTPServer((h
                     str(Path(__file__).with_name("DirectRemoteCheck.swift"))], check=True)
     subprocess.run([str(binary), host, str(web.server_port), str(ir.server_address[1])], check=True, timeout=40)
     assert frames == [("volume-up", ""), ("source-selection", "USB"), ("source-selection", "iPod"),
-                      ("harman_volume", ""), ("harman_volume", "")]
+                      ("harman_volume", ""), ("harman_volume", ""), ("power-on", "")]
     assert ir_operations == [0x65, 0x65, 0x6a]

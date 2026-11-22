@@ -33,6 +33,8 @@ Harman also advertised a companion app for the **BDS 3772 and 7772** packages. T
 
 ## What the network can establish
 
+For standby settings, firmware differences and Otoha’s infrared setup policy, see [power-on behavior by model](standby-wake.md).
+
 The references below come from inspection of Harman’s `com.harman.hkremote` 4.5, build 82, SHA-256 `5cd50ddca667fb1aea5d972fd71054bf5292bb2850a3036897e4b304b074f85c`. The relevant code is in `device.net.UdpClientHelper`, `DeviceWifiManager.onDeviceFound`, `parserMsgDevice`, and the model-specific `CommandSet` classes. HKAPI’s PHP source independently records the AVR and legacy BDS framing. [Signed application][app] · [HKAPI AVR class][avrwire] · [HKAPI BDS class][bdswire]
 
 | Profile | Request target | XML under `harman` | What identifies it |

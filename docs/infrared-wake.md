@@ -23,6 +23,6 @@ The stereo can turn off its network connection in standby. A Wi-Fi infrared blas
 4. Paste the full HTTP or HTTPS URL in **Power-on webhook URL** and tap **Link blaster**. Use the local Power On link provided by your blaster or controller.
 5. When you’re ready to try it, put the stereo in standby and tap **Power on**. To change the link, open **Infrared wake → Forget blaster**.
 
-If the iPhone declines a link that uses a hostname, use the controller’s private Wi-Fi IP address in the URL. The browser bridge also accepts `.local` hostnames. Both expect the webhook to return an HTTP 2xx response.
+If the iPhone declines a link that uses a hostname, use the controller’s private Wi-Fi IP address in the URL. Otoha expects the webhook to return an HTTP 2xx response.
 
 For example, in Home Assistant create an automation with a **Webhook** trigger, enable POST and keep local-only access enabled. Set its action to send the saved On command. Save the automation and copy its local URL, including the generated webhook ID. [Home Assistant webhook instructions](https://www.home-assistant.io/triggers/webhook/)

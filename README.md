@@ -10,10 +10,6 @@ Otoha turns your iPhone into a Wi-Fi remote for a compatible Harman Kardon recei
 
 Otoha remembers the stereo on this iPhone. To change it, open **Settings → Locate devices**. If the list is empty, check that the stereo is fully on, use your regular home Wi-Fi, and enable **Settings → Privacy & Security → Local Network → Otoha** on the phone. Then search again.
 
-## Away from home
-
-The current direct-control build works while the iPhone is on the same network as the stereo.
-
 ## Optional infrared wake
 
 Some stereos stop listening to Wi-Fi commands in standby. For the HK 3770, a supported Wi-Fi infrared blaster can send the original remote’s On signal. Set up the blaster on your home Wi-Fi using its manufacturer’s phone app, aim it at the receiver, then open **Power → Set up infrared wake** in Otoha. Choose **Not listed** to connect a different blaster through its local power-on webhook or a home automation hub. [Blaster instructions](docs/infrared-wake.md)

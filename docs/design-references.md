@@ -39,5 +39,5 @@ blender --background "design/Otoha Hardware.blend" --command blender_mcp
 
 1. Use MCP to select the product scene, inspect its objects and capture the current camera with `render_viewport_to_path`. This also works headlessly.
 2. Compare the intended camera view with the product manual or manufacturer photograph. Edit [the mesh generator](../design/hardware.py), [model aliases](../design/hardware_catalog.py) or [the paired shot](../design/study.py).
-3. Rebuild with `blender -b --factory-startup --python-exit-code 1 -P design/hardware.py`. The build exports each GLB, imports it into a clean scene and renders the portrait used by both apps. Append `-- HK3770 RMmini3` for a quick preview of those models. A full run also writes the editable library, shared catalog and paired still.
-4. Run `python3 design/board.py` with Pillow installed to compose the board. Check the changed identities in the running web remote and iPhone simulator at the equipment plate’s normal display size. An isolated bridge fixture can supply the model and blaster labels.
+3. Rebuild with `blender -b --factory-startup --python-exit-code 1 -P design/hardware.py`. The build exports each GLB, imports it into a clean scene and renders the portrait used by the iPhone app. Append `-- HK3770 RMmini3` for a quick preview of those models. A full run also writes the editable library, shared catalog and paired still.
+4. Run `python3 design/board.py` with Pillow installed to compose the board. Check the changed identities in the iPhone simulator at the equipment plate’s normal display size.

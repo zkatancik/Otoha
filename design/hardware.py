@@ -17,7 +17,7 @@ sys.path.insert(0, str(DESIGN))
 from hardware_catalog import catalog
 
 MODELS = list(catalog())
-APP_ART = DESIGN.parent / "public/assets/hardware"
+APP_ART = DESIGN.parent / "ios/Otoha/hardware"
 GLBS = DESIGN / "models"
 MM = 0.001
 TAU = math.tau

@@ -14,7 +14,7 @@ AB74283512704D78B778632C = { isa = PBXBuildFile; fileRef = C456A7EA6C174749B77AB
 CE8E464727BD42F1BADDF8C4 = { isa = PBXBuildFile; fileRef = 2432DB7DAA9F450DA06DBB76; };
 AD7BDC6CB4CC4D34815D5135 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarmanProtocol.swift; sourceTree = "<group>"; };
 16B638B6A17F43069A5CBF8D = { isa = PBXBuildFile; fileRef = AD7BDC6CB4CC4D34815D5135; };
-F41D86A08E9A4B27B0E68217 = { isa = PBXFileReference; lastKnownFileType = folder; name = hardware; path = ../../public/assets/hardware; sourceTree = "<group>"; };
+F41D86A08E9A4B27B0E68217 = { isa = PBXFileReference; lastKnownFileType = folder; name = hardware; path = hardware; sourceTree = "<group>"; };
 2C46953AEE814D5D8DD40259 = { isa = PBXBuildFile; fileRef = F41D86A08E9A4B27B0E68217; };
 AEA0830874224063BF9EE596 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNetwork.swift; sourceTree = "<group>"; };
 86A5FFBAC9624ED286D24314 = { isa = PBXBuildFile; fileRef = AEA0830874224063BF9EE596; };

@@ -5,7 +5,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 DESIGN = Path(__file__).resolve().parent
-ART = DESIGN.parent / "public/assets"
+ART = DESIGN.parent / "ios/Otoha/hardware"
 PAPER = "#F5F3EC"
 INK = "#222520"
 MUTED = "#575C53"
@@ -34,7 +34,7 @@ def row(sheet, y, height, title, items):
     cell = (W - 2 * MARGIN) / len(items)
     for i, (key, label) in enumerate(items):
         x = round(MARGIN + (i + 0.5) * cell)
-        img = Image.open(ART / "hardware" / (key + ".webp")).convert("RGBA")
+        img = Image.open(ART / (key + ".webp")).convert("RGBA")
         img = img.crop(img.getchannel("A").getbbox())
         img.thumbnail((round(cell * 0.84), height - 107), Image.Resampling.LANCZOS)
         sheet.paste(img, (x - img.width // 2, y + height - 43 - img.height), img)
@@ -44,7 +44,7 @@ def row(sheet, y, height, title, items):
 def main():
     sheet = Image.new("RGB", (W, 1280), PAPER)
     draw = ImageDraw.Draw(sheet)
-    icon = Image.open(ART / "icon.png").convert("RGBA").resize((48, 48), Image.Resampling.LANCZOS)
+    icon = Image.open(DESIGN / "icon.png").convert("RGBA").resize((48, 48), Image.Resampling.LANCZOS)
     sheet.paste(icon, (MARGIN, 25), icon)
     draw.text((MARGIN + 61, 49), "Otoha", font=face(45, True), anchor="lm", fill=INK)
     draw.text((W - MARGIN, 50), "Equipment library", font=face(25), anchor="rm", fill=MUTED)

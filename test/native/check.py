@@ -20,9 +20,15 @@ learned_signal = bytes.fromhex("26 00 06 00 10 11 20 21 40 41")
 
 class Descriptor(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        state = self.server.power_state.read_text()
+        if state == "off":
+            self.send_error(503)
+            return
         body = b"<root><device><manufacturer>Harman Kardon</manufacturer><modelName>HK 3770</modelName><friendlyName>Test &amp; Stereo</friendlyName><UDN>uuid:otoha-test</UDN></device></root>"
         if self.path == "/avr.xml":
             body = body.replace(b"HK 3770", b"AVR 170").replace(b"otoha-test", b"otoha-avr")
+        elif state == "other":
+            body = body.replace(b"otoha-test", b"other-stereo")
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -44,6 +50,8 @@ class Receiver(socketserver.StreamRequestHandler):
             assert body.endswith("</control></common></avr></harman>")
             key = body.split("<name>")[1].split("</name>")[0]
             if key == "heart-alive":
+                if self.server.power_state.read_text() in ("off", "booting"):
+                    return
                 self.wfile.write(b"<harman><avr><common><status><name>heart-")
                 self.wfile.write(b"alive</name></status></common></avr></harman>")
             else:
@@ -123,6 +131,9 @@ class RMFixture(socketserver.UDPServer):
 with tempfile.TemporaryDirectory() as folder, http.server.ThreadingHTTPServer((host, 0), Descriptor) as web, \
         TCPFixture((host, 10025), Receiver) as stereo, RMFixture(0x2737, "001122334455") as mini, \
         RMFixture(0x51da, "0123456789ab") as rm4:
+    power_state = Path(folder) / "power-state"
+    power_state.write_text("on")
+    stereo.power_state = web.power_state = power_state
     for server in (web, stereo, mini, rm4):
         threading.Thread(target=server.serve_forever, daemon=True).start()
     files = ["HarmanProtocol", "HarmanNetwork", "LocalNetwork", "BroadLink", "LocalInfrared", "Remote"]
@@ -130,9 +141,10 @@ with tempfile.TemporaryDirectory() as folder, http.server.ThreadingHTTPServer((h
     shutil.copy(root / "ios/Otoha/receiver-profiles.json", folder)
     subprocess.run(["xcrun", "swiftc", "-o", str(binary), *[str(root / f"ios/Otoha/{name}.swift") for name in files],
                     str(Path(__file__).with_name("DirectRemoteCheck.swift"))], check=True)
-    subprocess.run([str(binary), host, str(web.server_port), str(mini.server_address[1]), str(rm4.server_address[1])], check=True, timeout=45)
+    subprocess.run([str(binary), host, str(web.server_port), str(mini.server_address[1]), str(rm4.server_address[1]),
+                    str(power_state)], check=True, timeout=45)
     assert frames == [("volume-up", ""), ("source-selection", "USB"), ("source-selection", "iPod"),
-                      ("harman_volume", ""), ("harman_volume", ""), ("power-on", "")]
+                      ("harman_volume", ""), ("harman_volume", ""), ("volume-down", ""), ("power-on", "")], frames
     import sys
     sys.path.insert(0, str(root / "scripts"))
     from ir_preset import power_on_pulses

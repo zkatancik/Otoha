@@ -45,7 +45,7 @@ struct Receiver {
   private var epoch = ConnectionEpoch()
   private var refreshing = false
   private var verified = false
-  private var lastSearch = Date.distantPast
+  private var nextRediscovery = ContinuousClock.Instant.now
   private var found: [HKDevice] = []
   private var foundAt = Date.distantPast
   private var volumeStep: Task<Bool, Never>?
@@ -122,7 +122,7 @@ struct Receiver {
 
   private func resetConnection() {
     verified = false
-    lastSearch = .distantPast
+    nextRediscovery = .now
     found = []
     receiver?.online = false
     receiver?.trackedMode = nil
@@ -207,17 +207,22 @@ struct Receiver {
       if !online { disconnected() }
       return
     }
-    // A sleeping receiver can be offline for hours. Keep its remote and IR wake available.
-    guard Date().timeIntervalSince(lastSearch) >= 90 else { return }
-    lastSearch = Date()
-    guard let match = await identify(saved), version == epoch, !Task.isCancelled, await HarmanNetwork.online(match),
-          version == epoch, !Task.isCancelled else { return }
+    guard let match = await identify(saved, throttleDiscovery: true), version == epoch, !Task.isCancelled,
+          await HarmanNetwork.online(match), version == epoch, !Task.isCancelled else { return }
     try? accept(match)
   }
 
-  private func identify(_ saved: HKDevice) async -> HKDevice? {
+  private func identify(_ saved: HKDevice, throttleDiscovery: Bool = false) async -> HKDevice? {
+    let version = epoch
     if let url = saved.descriptionURL, let device = try? await HarmanNetwork.describe(url),
        device.id == saved.id, device.model == saved.model { return device }
+    guard epoch == version, !Task.isCancelled else { return nil }
+    // Check the saved address on every refresh. Only a search across the LAN needs a cooldown.
+    if throttleDiscovery {
+      let now = ContinuousClock.Instant.now
+      guard now >= nextRediscovery else { return nil }
+      nextRediscovery = now.advanced(by: .seconds(30))
+    }
     return try? await discover().first { $0.id == saved.id && $0.model == saved.model }
   }
 
@@ -293,7 +298,11 @@ struct Receiver {
         }
       }
       try check(version)
-      if action == "standby" || action == "wake" { receiver?.trackedMode = nil; receiver?.lastSource = nil; lastSearch = .distantPast }
+      if action == "standby" || action == "wake" {
+        receiver?.trackedMode = nil
+        receiver?.lastSource = nil
+        nextRediscovery = .now
+      }
       if action != "louder" && action != "quieter" { pulse += 1; notify(message) }
       return true
     } catch {

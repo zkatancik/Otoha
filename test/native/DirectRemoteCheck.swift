@@ -13,7 +13,9 @@ import Foundation
       return [try await HarmanNetwork.describe(url)]
     }
     var interruptFirstSearch: (() -> Void)?
+    var searches = 0
     let remote = Remote(defaults: prefs, discover: {
+      searches += 1
       if let interrupt = interruptFirstSearch {
         interruptFirstSearch = nil
         interrupt()
@@ -39,6 +41,29 @@ import Foundation
       precondition(sent, "Failed to send " + action)
     }
     precondition(remote.receiver?.trackedMode == "Low" && remote.receiver?.lastSource == "usb")
+    let powerState = URL(fileURLWithPath: CommandLine.arguments[5])
+    func setPowerState(_ state: String) throws {
+      try Data(state.utf8).write(to: powerState, options: .atomic)
+    }
+    try setPowerState("off")
+    await remote.refresh()
+    precondition(remote.receiver?.online == false)
+    await remote.refresh()
+    let searchesWhileOff = searches
+    await remote.refresh()
+    precondition(searches == searchesWhileOff, "Repeated a network-wide search during standby")
+    try setPowerState("other")
+    await remote.refresh()
+    precondition(remote.receiver?.online == false, "Reconnected to another stereo at the saved address")
+    try setPowerState("booting")
+    await remote.refresh()
+    precondition(remote.receiver?.online == false, "Reconnected before the control service was ready")
+    try setPowerState("on")
+    await remote.refresh()
+    precondition(remote.receiver?.online == true, "The open remote stayed offline after the receiver powered back on")
+    precondition(searches == searchesWhileOff && remote.receiver?.device.id == devices[0].id)
+    let controlsRestored = await remote.send("quieter")
+    precondition(controlsRestored)
     let restarted = Remote(defaults: prefs, discover: search)
     precondition(restarted.receiver?.online == false && restarted.receiver?.trackedMode == nil)
     precondition(restarted.canWake)
@@ -125,6 +150,6 @@ import Foundation
         }
       }
     }
-    print("Verified direct receiver commands, post-connection offers, per-model eligibility, and BroadLink learning, retry and playback.")
+    print("Verified power-cycle reconnection, receiver commands, post-connection offers, per-model eligibility, and BroadLink learning, retry and playback.")
   }
 }

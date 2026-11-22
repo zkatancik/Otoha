@@ -19,7 +19,7 @@ An IR blaster, such as a BroadLink RM mini 3, sends the same infrared signal as 
 
 On iPhone, choose whole modules after linking a device. **Volume** includes the fader and mute, **Power** includes wake and standby, and **Inputs** lets you pin individual sources. **Use defaults** starts with the recommended layout. Saving opens the remote. On later launches, Otoha opens the saved remote for that device directly, including while the iPhone reconnects.
 
-A chevron at the bottom points to more controls. Swipe down across the remote to open a narrow “Pull for more options” margin. Keep pulling to reveal the next page, or let a short pull settle back. Swipe up to return. The volume thumb keeps its own drag gesture. Tap a chevron or activate it with VoiceOver to turn one page. Change your selection under **Settings → Customize remote**. Earlier saved shortcut selections migrate to the corresponding modules.
+Swipe up on the remote to see the next page of controls. Swipe down to return to the previous page. Dragging the volume thumb adjusts the volume. With VoiceOver, focus **Remote page** and swipe up or down to turn a page. Change your selection under **Settings → Customize remote**. Earlier saved shortcut selections migrate to the corresponding modules.
 
 ## Listening controls
 

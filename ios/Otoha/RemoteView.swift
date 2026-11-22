@@ -206,7 +206,7 @@ struct RemoteView: View {
       if !faces.isEmpty {
         RemotePager(
           page: $page, count: faces.count, enabled: panel == nil && scene == .active,
-          arrowInset: layout.splitX
+          layout: layout
         ) { index in
           face(faces[index], layout: layout, device: device)
         }

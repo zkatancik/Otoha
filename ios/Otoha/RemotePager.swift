@@ -11,116 +11,107 @@ struct RemotePager<Content: View>: View {
   @Binding var page: Int
   let count: Int
   let enabled: Bool
-  let arrowInset: CGFloat
+  let layout: FaceGeometry
   @ViewBuilder let content: (Int) -> Content
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var offset: CGFloat = 0
   @State private var settling = false
   @State private var revision = 0
-  @State private var armed = false
-
-  static var arrowHeight: CGFloat { 26 }
-  private let seam: CGFloat = 34
 
   var body: some View {
-    GeometryReader { geometry in
-      let size = geometry.size
-      let index = max(0, min(page, count - 1))
-      let stride = size.height + seam
+    let size = layout.size
+    let index = max(0, min(page, count - 1))
+    let height = max(0, size.height - (count > 1 ? layout.footer : 0))
+    let moving = offset != 0 || settling
+    let visible = moving ? max(0, index - 1)..<min(count, index + 2) : index..<min(count, index + 1)
+    VStack(spacing: 0) {
       ZStack(alignment: .top) {
-        let moving = settling || offset != 0
-        let visible = moving ? max(0, index - 1)..<min(count, index + 2) : index..<(index + 1)
         ForEach(visible, id: \.self) { item in
-          let position = CGFloat(item - index) * stride - offset
-          VStack(spacing: 0) {
-            content(item)
-            if count > 1 {
-              HStack(spacing: 0) {
-                if arrowInset > 0 { Color.clear.frame(width: arrowInset) }
-                HStack(spacing: 18) {
-                  if item > 0 { arrow(forward: false, index: index, height: size.height) }
-                  if item < count - 1 { arrow(forward: true, index: index, height: size.height) }
-                }.frame(maxWidth: .infinity)
-              }.frame(height: Self.arrowHeight)
-            }
-          }
-          .frame(width: size.width, height: size.height)
-          .background(Palette.paper)
-          .allowsHitTesting(item == index && offset == 0 && !settling)
-          .accessibilityElement(children: .contain)
-          .accessibilityHidden(item != index)
-          .offset(y: position)
-          .transition(.identity)
-        }
-        if offset != 0 {
-          let forward = offset > 0
-          Text(forward ? "Pull for more options" : "Pull to go back")
-            .font(.footnote.weight(.semibold)).foregroundStyle(Palette.controlTint)
-            .frame(width: size.width, height: seam)
-            .background(Palette.modeSurface)
-            .offset(y: forward ? size.height - offset : -offset - seam)
-            .accessibilityHidden(true).allowsHitTesting(false)
+          content(item)
+            .frame(width: size.width, height: height)
+            .background(Palette.paper)
+            .allowsHitTesting(item == index && offset == 0 && !settling)
+            .accessibilityElement(children: .contain)
+            .accessibilityHidden(item != index)
+            .offset(y: CGFloat(item - index) * height + offset)
+            .transition(.identity)
         }
       }
-      .frame(width: size.width, height: size.height, alignment: .top)
+      .frame(width: size.width, height: height, alignment: .top)
       .clipped()
-      .background {
-        PagePan(
-          available: enabled && count > 1 && !settling, previous: index > 0,
-          next: index + 1 < count
-        ) { distance, ended, cancelled in
-          let hasTarget = distance > 0 ? index + 1 < count : index > 0
-          let length = hasTarget ? abs(distance) : 0
-          // The first part of the stroke opens only the narrow, labelled seam.
-          let opening: CGFloat = 25
-          let detent: CGFloat = 54
-          let threshold = min(124, max(84, size.height * 0.17))
-          let preview = min(length, opening) * seam / opening
-          let reveal = max(0, length - detent) * min(2.7, max(1.55, size.height / 275))
-          let sign: CGFloat = distance >= 0 ? 1 : -1
-          if ended {
-            let target = !cancelled && length >= threshold ? index + Int(sign) : index
-            settle(from: index, to: target, height: size.height)
-          } else {
-            offset = sign * min(stride, preview + reveal)
-            armed = length >= threshold
-          }
-        }
+      if count > 1 {
+        pageHint(index, height: height)
+          .frame(maxWidth: .infinity).padding(.leading, layout.splitX)
+          .frame(height: layout.footer)
       }
-      .onChange(of: size) { reset() }
-      .onChange(of: count) {
-        reset()
-        page = max(0, min(page, count - 1))
-      }
-      .onChange(of: enabled) { if !enabled { reset() } }
-      .onDisappear { reset() }
     }
-    .sensoryFeedback(.impact(weight: .light), trigger: armed) { !$0 && $1 }
+    .background {
+      PagePan(
+        available: enabled && count > 1 && !settling, previous: index > 0, next: index + 1 < count
+      ) { pan in
+        track(pan, from: index, height: height)
+      }
+    }
+    .onChange(of: size) { reset() }
+    .onChange(of: count) {
+      reset()
+      page = max(0, min(page, count - 1))
+    }
+    .onChange(of: enabled) { if !enabled { reset() } }
+    .onDisappear { reset() }
   }
 
-  private func arrow(forward: Bool, index: Int, height: CGFloat) -> some View {
-    Button {
-      settle(from: index, to: index + (forward ? 1 : -1), height: height)
-    } label: {
-      Image(systemName: forward ? "chevron.down" : "chevron.up")
-        .font(.system(size: 15, weight: .bold)).foregroundStyle(Palette.controlTint)
-        .frame(width: 68, height: Self.arrowHeight).contentShape(Rectangle())
+  private func track(_ pan: UIPanGestureRecognizer, from index: Int, height: CGFloat) {
+    guard enabled, !settling else { return }
+    let distance = pan.translation(in: pan.view).y
+    let next = index + (distance < 0 ? 1 : -1)
+    let hasPage = (0..<count).contains(next)
+    switch pan.state {
+    case .began, .changed:
+      offset = hasPage ? min(height, max(-height, distance)) : 0
+    case .ended:
+      // Project a short part of the release velocity so a quick flick can finish a page turn.
+      let projected = distance + pan.velocity(in: pan.view).y * 0.15
+      let threshold = min(110, height * 0.22)
+      let turn = hasPage && abs(distance) >= 12 && projected * distance > 0 && abs(projected) >= threshold
+      settle(from: index, to: turn ? next : index, height: height)
+    case .cancelled, .failed:
+      settle(from: index, to: index, height: height)
+    default: break
     }
-    .buttonStyle(.plain)
-    .accessibilityLabel(forward ? "Show more controls" : "Previous controls")
-    .accessibilityIdentifier(forward ? "nextRemotePage" : "previousRemotePage")
+  }
+
+  private func pageHint(_ index: Int, height: CGFloat) -> some View {
+    let hint: LocalizedStringKey
+    if index == 0 {
+      hint = "Swipe up for more controls"
+    } else if index == count - 1 {
+      hint = "Swipe down to return"
+    } else {
+      hint = "Swipe up or down for more controls"
+    }
+    return Text(hint)
+      .font(.caption).foregroundStyle(Palette.controlTint)
+      .accessibilityLabel("Remote page")
+      .accessibilityValue("Page \(index + 1) of \(count)")
+      .accessibilityAdjustableAction { direction in
+        switch direction {
+        case .increment: settle(from: index, to: index + 1, height: height)
+        case .decrement: settle(from: index, to: index - 1, height: height)
+        @unknown default: break
+        }
+      }
   }
 
   private func settle(from index: Int, to next: Int, height: CGFloat) {
-    guard !settling, (0..<count).contains(next) else { return }
+    guard enabled, !settling, (0..<count).contains(next) else { return }
     let token = revision
     settling = true
-    armed = false
     withAnimation(
       reduceMotion ? nil : .smooth(duration: next == index ? 0.23 : 0.32),
       completionCriteria: .removed
     ) {
-      offset = CGFloat(next - index) * (height + seam)
+      offset = CGFloat(index - next) * height
     } completion: {
       guard token == revision else { return }
       var transaction = Transaction()
@@ -137,7 +128,6 @@ struct RemotePager<Content: View>: View {
     revision += 1
     offset = 0
     settling = false
-    armed = false
   }
 }
 
@@ -147,7 +137,7 @@ private struct PagePan: UIViewRepresentable {
   let available: Bool
   let previous: Bool
   let next: Bool
-  let update: (CGFloat, Bool, Bool) -> Void
+  let update: (UIPanGestureRecognizer) -> Void
 
   func makeUIView(context: Context) -> Surface { Surface() }
   func updateUIView(_ view: Surface, context: Context) {
@@ -191,7 +181,7 @@ private struct PagePan: UIViewRepresentable {
       guard gesture === pan, let configuration, configuration.available else { return false }
       let v = pan.velocity(in: window)
       guard abs(v.y) > abs(v.x) * 1.2 else { return false }
-      return v.y > 0 ? configuration.next : configuration.previous
+      return v.y < 0 ? configuration.next : configuration.previous
     }
 
     func gestureRecognizer(
@@ -200,13 +190,7 @@ private struct PagePan: UIViewRepresentable {
     ) -> Bool { true }
 
     @objc private func track(_ gesture: UIPanGestureRecognizer) {
-      let distance = gesture.translation(in: window).y
-      switch gesture.state {
-      case .began, .changed: configuration?.update(distance, false, false)
-      case .ended: configuration?.update(distance, true, false)
-      case .cancelled, .failed: configuration?.update(0, true, true)
-      default: break
-      }
+      configuration?.update(gesture)
     }
   }
 }

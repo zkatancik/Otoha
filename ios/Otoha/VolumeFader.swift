@@ -7,7 +7,6 @@ struct VolumeFader: View {
   let step: @MainActor (Bool) async -> Bool
   @State private var position: CGFloat = 0
   @State private var pressedSide = 0
-  @State private var gripFrame = CGRect.zero
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -46,17 +45,12 @@ struct VolumeFader: View {
           thumb
             .frame(width: min(119, max(0, well.size.width - 4)), height: 44)
             .offset(y: -position * travel)
-            .onGeometryChange(for: CGRect.self) {
-              $0.frame(in: .named("faderSurface"))
-            } action: {
-              gripFrame = $0
-            }
+            .anchorPreference(key: GripBounds.self, value: .bounds) { $0 }
         }
       }
       .padding(.trailing, 12)
     }
     .frame(height: height)
-    .coordinateSpace(name: "faderSurface")
     .background(
       LinearGradient(
         colors: [Color(white: 0.075), Color(white: 0.13)],
@@ -65,15 +59,17 @@ struct VolumeFader: View {
     .overlay(RoundedRectangle(cornerRadius: 17).strokeBorder(.white.opacity(0.12)))
     .opacity(enabled ? 1 : 0.54)
     .accessibilityHidden(true)
-    .overlay {
-      FaderTouchSurface(
-        enabled: enabled, gripFrame: gripFrame, step: step, pressed: { pressedSide = $0 }
-      ) {
-        value, released in
-        if released && !reduceMotion {
-          withAnimation(.spring(duration: 0.23, bounce: 0.15)) { position = 0 }
-        } else {
-          position = value
+    .overlayPreferenceValue(GripBounds.self) { grip in
+      GeometryReader { surface in
+        FaderTouchSurface(
+          enabled: enabled, gripFrame: grip.map { surface[$0] } ?? .zero,
+          step: step, pressed: { pressedSide = $0 }
+        ) { value, released in
+          if released && !reduceMotion {
+            withAnimation(.spring(duration: 0.23, bounce: 0.15)) { position = 0 }
+          } else {
+            position = value
+          }
         }
       }
     }
@@ -111,6 +107,13 @@ struct VolumeFader: View {
         Capsule().fill(.black.opacity(0.45)).frame(width: 34, height: 2)
       }
     }.shadow(color: .black.opacity(0.7), radius: 3, y: 3)
+  }
+}
+
+private enum GripBounds: PreferenceKey {
+  static var defaultValue: Anchor<CGRect>? { nil }
+  static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+    value = nextValue() ?? value
   }
 }
 

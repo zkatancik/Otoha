@@ -1,0 +1,617 @@
+{
+  "models": {
+    "HK3700": {
+      "profile": "stereo",
+      "model": "HK 3700"
+    },
+    "HK3770": {
+      "profile": "stereo",
+      "model": "HK 3770"
+    },
+    "AVR151": {
+      "profile": "avr",
+      "model": "AVR 151"
+    },
+    "AVR1510": {
+      "profile": "avr",
+      "model": "AVR 1510"
+    },
+    "AVR161": {
+      "profile": "avr",
+      "model": "AVR 161"
+    },
+    "AVR1610": {
+      "profile": "avr",
+      "model": "AVR 1610"
+    },
+    "AVR171": {
+      "profile": "avr",
+      "model": "AVR 171"
+    },
+    "AVR1710": {
+      "profile": "avr",
+      "model": "AVR 1710"
+    },
+    "AVR151S": {
+      "profile": "avr",
+      "model": "AVR 151S"
+    },
+    "AVR1510S": {
+      "profile": "avr",
+      "model": "AVR 1510S"
+    },
+    "AVR161S": {
+      "profile": "avr",
+      "model": "AVR 161S"
+    },
+    "AVR1610S": {
+      "profile": "avr",
+      "model": "AVR 1610S"
+    },
+    "AVR171S": {
+      "profile": "avr",
+      "model": "AVR 171S"
+    },
+    "AVR1710S": {
+      "profile": "avr",
+      "model": "AVR 1710S"
+    },
+    "AVR170": {
+      "profile": "avr",
+      "model": "AVR 170"
+    },
+    "AVR1700": {
+      "profile": "avr",
+      "model": "AVR 1700"
+    },
+    "AVR270": {
+      "profile": "avr",
+      "model": "AVR 270"
+    },
+    "AVR2700": {
+      "profile": "avr",
+      "model": "AVR 2700"
+    },
+    "AVR370": {
+      "profile": "avr",
+      "model": "AVR 370"
+    },
+    "AVR3700": {
+      "profile": "avr",
+      "model": "AVR 3700"
+    },
+    "AVR151/1510": {
+      "profile": "avr",
+      "model": "AVR 151/1510"
+    },
+    "AVR151S/1510S": {
+      "profile": "avr",
+      "model": "AVR 151S/1510S"
+    },
+    "AVR161/1610": {
+      "profile": "avr",
+      "model": "AVR 161/1610"
+    },
+    "AVR161S/1610S": {
+      "profile": "avr",
+      "model": "AVR 161S/1610S"
+    },
+    "AVR171/1710": {
+      "profile": "avr",
+      "model": "AVR 171/1710"
+    },
+    "AVR171S/1710S": {
+      "profile": "avr",
+      "model": "AVR 171S/1710S"
+    },
+    "AVR170/1700": {
+      "profile": "avr",
+      "model": "AVR 170/1700"
+    },
+    "AVR270/2700": {
+      "profile": "avr",
+      "model": "AVR 270/2700"
+    },
+    "AVR370/3700": {
+      "profile": "avr",
+      "model": "AVR 370/3700"
+    },
+    "AVR151/230": {
+      "profile": "avr",
+      "model": "AVR 151/230"
+    },
+    "AVR161/230": {
+      "profile": "avr",
+      "model": "AVR 161/230"
+    },
+    "AVR171/230": {
+      "profile": "avr",
+      "model": "AVR 171/230"
+    },
+    "AVR151/230C": {
+      "profile": "avr",
+      "model": "AVR 151/230C"
+    },
+    "AVR161/230C": {
+      "profile": "avr",
+      "model": "AVR 161/230C"
+    },
+    "AVR171/230C": {
+      "profile": "avr",
+      "model": "AVR 171/230C"
+    },
+    "AVR170/230C": {
+      "profile": "avr",
+      "model": "AVR 170/230C"
+    },
+    "AVR151S/230C": {
+      "profile": "avr",
+      "model": "AVR 151S/230C"
+    },
+    "AVR161S/230C": {
+      "profile": "avr",
+      "model": "AVR 161S/230C"
+    },
+    "AVR171S/230C": {
+      "profile": "avr",
+      "model": "AVR 171S/230C"
+    },
+    "BDSG3": {
+      "profile": "bds3",
+      "model": "BDS G3"
+    },
+    "BDS275": {
+      "profile": "bds3",
+      "model": "BDS 275"
+    },
+    "BDS277": {
+      "profile": "bds3",
+      "model": "BDS 277"
+    },
+    "BDS575": {
+      "profile": "bds3",
+      "model": "BDS 575"
+    },
+    "BDS577": {
+      "profile": "bds3",
+      "model": "BDS 577"
+    },
+    "BDS375": {
+      "profile": "bds3",
+      "model": "BDS 375"
+    },
+    "BDS477": {
+      "profile": "bds3",
+      "model": "BDS 477"
+    },
+    "BDS775": {
+      "profile": "bds3",
+      "model": "BDS 775"
+    },
+    "BDS877": {
+      "profile": "bds3",
+      "model": "BDS 877"
+    },
+    "BDS7773W": {
+      "profile": "bds3",
+      "model": "BDS 7773W"
+    },
+    "BDS235": {
+      "profile": "bds4",
+      "model": "BDS 235"
+    },
+    "BDS535": {
+      "profile": "bds4",
+      "model": "BDS 535"
+    },
+    "BDS280": {
+      "profile": "bds4",
+      "model": "BDS 280"
+    },
+    "BDS580": {
+      "profile": "bds4",
+      "model": "BDS 580"
+    },
+    "BDS280S": {
+      "profile": "bds4",
+      "model": "BDS 280S"
+    },
+    "BDS580S": {
+      "profile": "bds4",
+      "model": "BDS 580S"
+    },
+    "BDS335": {
+      "profile": "bds4",
+      "model": "BDS 335"
+    },
+    "BDS635": {
+      "profile": "bds4",
+      "model": "BDS 635"
+    },
+    "BDS380": {
+      "profile": "bds4",
+      "model": "BDS 380"
+    },
+    "BDS480": {
+      "profile": "bds4",
+      "model": "BDS 480"
+    },
+    "BDS480W": {
+      "profile": "bds4",
+      "model": "BDS 480W"
+    },
+    "BDS680": {
+      "profile": "bds4",
+      "model": "BDS 680"
+    },
+    "BDS780": {
+      "profile": "bds4",
+      "model": "BDS 780"
+    },
+    "BDS780W": {
+      "profile": "bds4",
+      "model": "BDS 780W"
+    },
+    "BDS880": {
+      "profile": "bds4",
+      "model": "BDS 880"
+    },
+    "BDS385S": {
+      "profile": "bds4",
+      "model": "BDS 385S"
+    },
+    "BDS485S": {
+      "profile": "bds4",
+      "model": "BDS 485S"
+    },
+    "BDS685S": {
+      "profile": "bds4",
+      "model": "BDS 685S"
+    },
+    "BDS785S": {
+      "profile": "bds4",
+      "model": "BDS 785S"
+    },
+    "BDS885S": {
+      "profile": "bds4",
+      "model": "BDS 885S"
+    },
+    "AURA": {
+      "profile": "mm",
+      "model": "Aura"
+    },
+    "AURAPLUS": {
+      "profile": "mm",
+      "model": "Aura Plus"
+    },
+    "SOUNDTUBE": {
+      "profile": "mm",
+      "model": "Aura"
+    },
+    "ONYX": {
+      "profile": "mm",
+      "model": "Onyx"
+    }
+  },
+  "profiles": {
+    "stereo": {
+      "target": "avr",
+      "tag": "avr",
+      "agent": "Harman Remote Controller/1.0",
+      "keys": {
+        "louder": "volume-up",
+        "quieter": "volume-down",
+        "mute": "mute-toggle",
+        "harman": "harman_volume",
+        "wake": "power-on",
+        "standby": "standby",
+        "sleep": "Sleep",
+        "play": "play",
+        "pause": "pause",
+        "next": "next",
+        "previous": "previous",
+        "menu": "top-menu",
+        "back": "exit",
+        "up": "up",
+        "down": "down",
+        "left": "left",
+        "right": "right",
+        "ok": "ok"
+      },
+      "sources": [
+        {
+          "id": "tv",
+          "name": "TV",
+          "icon": "tv-minimal",
+          "detail": "Television",
+          "wire": "TV"
+        },
+        {
+          "id": "bluetooth",
+          "name": "Bluetooth",
+          "icon": "bluetooth",
+          "detail": "Wireless audio",
+          "wire": "Bluetooth"
+        },
+        {
+          "id": "phono",
+          "name": "Phono",
+          "icon": "disc-3",
+          "detail": "Turntable",
+          "wire": "Phono"
+        },
+        {
+          "id": "fm",
+          "name": "FM / AM",
+          "icon": "radio",
+          "detail": "Radio tuner",
+          "wire": "FM"
+        },
+        {
+          "id": "cd",
+          "name": "CD",
+          "icon": "disc",
+          "detail": "Disc player",
+          "wire": "Disc"
+        },
+        {
+          "id": "network",
+          "name": "Network",
+          "icon": "network",
+          "detail": "Media server",
+          "wire": "Home Network"
+        },
+        {
+          "id": "usb",
+          "name": "USB / iPod",
+          "icon": "usb",
+          "detail": "Connected device",
+          "wire": "USB"
+        },
+        {
+          "id": "cable",
+          "name": "Cable / Sat",
+          "icon": "satellite-dish",
+          "detail": "Set-top box",
+          "wire": "Cable Sat"
+        },
+        {
+          "id": "internet",
+          "name": "Internet radio",
+          "icon": "radio-tower",
+          "detail": "vTuner",
+          "wire": "vTuner"
+        }
+      ]
+    },
+    "avr": {
+      "target": "AVR",
+      "tag": "avr",
+      "agent": "Harman Kardon AVR Remote Controller /2.0",
+      "keys": {
+        "louder": "volume-up",
+        "quieter": "volume-down",
+        "mute": "mute-toggle",
+        "wake": "power-on",
+        "standby": "power-off",
+        "sleep": "sleep",
+        "play": "play",
+        "pause": "pause",
+        "next": "next",
+        "previous": "previous",
+        "menu": "home",
+        "back": "back",
+        "up": "up",
+        "down": "down",
+        "left": "left",
+        "right": "right",
+        "ok": "ok"
+      },
+      "sources": [
+        {
+          "id": "tv",
+          "name": "TV",
+          "icon": "tv-minimal",
+          "detail": "Television",
+          "wire": "TV"
+        },
+        {
+          "id": "disc",
+          "name": "Disc",
+          "detail": "Disc player",
+          "wire": "Disc"
+        },
+        {
+          "id": "cable",
+          "name": "Cable / Sat",
+          "icon": "satellite-dish",
+          "detail": "Set-top box",
+          "wire": "Cable Sat"
+        },
+        {
+          "id": "radio",
+          "name": "Radio",
+          "detail": "Radio tuner",
+          "wire": "Radio"
+        },
+        {
+          "id": "usb",
+          "name": "USB",
+          "icon": "usb",
+          "detail": "Connected device",
+          "wire": "USB"
+        },
+        {
+          "id": "network",
+          "name": "Network",
+          "icon": "network",
+          "detail": "Media server",
+          "wire": "Home Network"
+        },
+        {
+          "id": "aux",
+          "name": "Aux",
+          "detail": "Auxiliary input",
+          "wire": "AUX"
+        }
+      ]
+    },
+    "bds3": {
+      "target": "HK_APP",
+      "tag": "bds",
+      "agent": "Harman Kardon BDS Remote Controller/1.0",
+      "keys": {
+        "louder": "volume-up",
+        "quieter": "volume-down",
+        "mute": "mute-toggle",
+        "wake": "power-on",
+        "standby": "power-off",
+        "sleep": "sleep",
+        "play": "Play",
+        "pause": "Pause",
+        "next": "Next",
+        "previous": "Previous",
+        "menu": "Home",
+        "back": "Back",
+        "up": "Up",
+        "down": "Down",
+        "left": "Left",
+        "right": "Right",
+        "ok": "Ok"
+      },
+      "sources": [
+        {
+          "id": "disc",
+          "name": "Disc",
+          "detail": "Disc player",
+          "wire": "DISC"
+        },
+        {
+          "id": "hdmi1",
+          "name": "HDMI 1",
+          "detail": "HDMI input",
+          "wire": "HDMI1"
+        },
+        {
+          "id": "hdmi2",
+          "name": "HDMI 2",
+          "detail": "HDMI input",
+          "wire": "HDMI2"
+        },
+        {
+          "id": "hdmi3",
+          "name": "HDMI 3",
+          "detail": "HDMI input",
+          "wire": "HDMI3"
+        },
+        {
+          "id": "usb",
+          "name": "USB",
+          "icon": "usb",
+          "detail": "Connected device",
+          "wire": "USB"
+        },
+        {
+          "id": "bluetooth",
+          "name": "Bluetooth",
+          "icon": "bluetooth",
+          "detail": "Wireless audio",
+          "wire": "Bluetooth"
+        },
+        {
+          "id": "radio",
+          "name": "Radio",
+          "detail": "Radio tuner",
+          "wire": "Radio"
+        },
+        {
+          "id": "aux",
+          "name": "Aux",
+          "detail": "Auxiliary input",
+          "wire": "AUX"
+        }
+      ]
+    },
+    "bds4": {
+      "target": "BDS",
+      "tag": "bds",
+      "agent": "Harman Remote Controller/1.0",
+      "keys": {
+        "louder": "volume-up",
+        "quieter": "volume-down",
+        "mute": "mute-toggle",
+        "wake": "power-on",
+        "standby": "standby",
+        "sleep": "Sleep",
+        "play": "play",
+        "pause": "pause",
+        "next": "next",
+        "previous": "previous",
+        "menu": "home",
+        "back": "back",
+        "up": "up",
+        "down": "down",
+        "left": "left",
+        "right": "right",
+        "ok": "Ok"
+      },
+      "sources": [
+        {
+          "id": "disc",
+          "name": "Disc",
+          "detail": "Disc player",
+          "wire": "Disc"
+        },
+        {
+          "id": "hdmi1",
+          "name": "HDMI 1",
+          "detail": "HDMI input",
+          "wire": "HDMI1"
+        },
+        {
+          "id": "hdmi2",
+          "name": "HDMI 2",
+          "detail": "HDMI input",
+          "wire": "HDMI2"
+        },
+        {
+          "id": "hdmi3",
+          "name": "HDMI 3",
+          "detail": "HDMI input",
+          "wire": "HDMI3"
+        },
+        {
+          "id": "usb",
+          "name": "USB",
+          "icon": "usb",
+          "detail": "Connected device",
+          "wire": "USB"
+        },
+        {
+          "id": "bluetooth",
+          "name": "Bluetooth",
+          "icon": "bluetooth",
+          "detail": "Wireless audio",
+          "wire": "Bluetooth"
+        },
+        {
+          "id": "radio",
+          "name": "Radio",
+          "detail": "Radio tuner",
+          "wire": "Radio"
+        }
+      ]
+    },
+    "mm": {
+      "target": "MM",
+      "tag": "mm",
+      "agent": "Harman Remote Controller/1.0",
+      "keys": {
+        "standby": "power-off",
+        "mute-on": "mute-on",
+        "mute-off": "mute-off"
+      },
+      "sources": []
+    }
+  }
+}

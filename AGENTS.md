@@ -1,0 +1,1 @@
+For hardware artwork, follow the [Blender workflow](docs/design-references.md#blender-workflow). Inspect the current model and capture its camera view through Blender MCP before editing the generator. Judge the rebuilt GLB at the same angle on the running equipment plate.

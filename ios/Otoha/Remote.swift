@@ -197,7 +197,7 @@ struct Receiver {
         let current = try await DirectInfrared.resolve(ir)
         try check(version)
         try await DirectInfrared.operate(current, send: true)
-        message = ir.kind == .webhook ? "Infrared wake requested." : "Infrared On signal sent."
+        message = "Infrared On signal sent."
       } else if action == "sync-mode" || action == "set-mode" {
         guard device.model == "HK 3770", let value, let target = Self.modes.firstIndex(of: value) else { return false }
         if action == "set-mode" {
@@ -242,7 +242,7 @@ struct Receiver {
     }
   }
 
-  func configureInfrared(_ action: String, receiverId: String, id: String? = nil, url: String? = nil) async throws {
+  func configureInfrared(_ action: String, receiverId: String, id: String? = nil) async throws {
     guard !busy, volumeStep == nil, let device = receiver?.device, device.id == receiverId, device.model == "HK 3770" else {
       throw RemoteError("Open infrared setup for your HK 3770 again.")
     }
@@ -252,7 +252,6 @@ struct Receiver {
     let version = epoch
     let key = "directIR." + device.id
     if action == "forget" {
-      if blaster(for: device)?.kind == .webhook { try ManualIRWebhook.forget(receiverId) }
       defaults.removeObject(forKey: key)
       receiver?.infrared = InfraredStatus(receiverId: receiverId, phase: "idle")
       return
@@ -260,9 +259,7 @@ struct Receiver {
     guard blaster(for: device) == nil else { throw RemoteError("Forget the linked blaster before adding another one.") }
     do {
       let choice: LocalBlaster
-      if action == "manual" {
-        choice = try ManualIRWebhook.save(url ?? "", receiverId: receiverId)
-      } else if action == "search" || action == "itach" {
+      if action == "search" || action == "itach" {
         receiver?.infrared = InfraredStatus(receiverId: receiverId, phase: "searching")
         let devices = try await DirectInfrared.discover(itach: action == "itach")
         try check(version)
@@ -275,11 +272,9 @@ struct Receiver {
       } else if action == "select", let candidate = receiver?.infrared?.devices?.first(where: { $0.id == id }) {
         choice = candidate
       } else { throw RemoteError("Find your blaster again.") }
-      if choice.kind != .webhook {
-        receiver?.infrared = InfraredStatus(receiverId: receiverId, phase: "linking")
-        try await DirectInfrared.operate(choice, send: false)
-        try check(version)
-      }
+      receiver?.infrared = InfraredStatus(receiverId: receiverId, phase: "linking")
+      try await DirectInfrared.operate(choice, send: false)
+      try check(version)
       defaults.set(try JSONEncoder().encode(choice), forKey: key)
       receiver?.infrared = InfraredStatus(receiverId: receiverId, phase: "linked", label: choice.label)
     } catch {

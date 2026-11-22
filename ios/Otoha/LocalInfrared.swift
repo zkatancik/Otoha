@@ -1,9 +1,8 @@
 import Darwin
 import Foundation
-import Security
 
 struct LocalBlaster: Codable, Identifiable {
-  enum Kind: String, Codable { case broadlink, irkit, remo, tasmota, itach, webhook }
+  enum Kind: String, Codable { case broadlink, irkit, remo, tasmota, itach }
   let id, label: String
   let kind: Kind
   let host: String
@@ -11,61 +10,6 @@ struct LocalBlaster: Codable, Identifiable {
   var type: Int?
   var mac: [UInt8]?
   var locked: Bool?
-}
-
-enum ManualIRWebhook {
-  static func endpoint(_ value: String) throws -> URL {
-    let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
-    var address = in_addr()
-    guard text.utf8.count <= 2048, !text.contains("\\"), !text.contains("#"),
-          let url = URL(string: text, encodingInvalidCharacters: false),
-          ["http", "https"].contains(url.scheme?.lowercased() ?? ""), let host = url.host,
-          inet_pton(AF_INET, host, &address) == 1, url.user == nil, url.password == nil,
-          (1...65535).contains(url.port ?? 80) else { throw invalidAddress }
-    let bits = UInt32(bigEndian: address.s_addr)
-    guard bits >> 24 == 10 || bits >> 20 == 0xac1 || bits >> 16 == 0xc0a8 else { throw invalidAddress }
-    return url
-  }
-
-  private static var invalidAddress: RemoteError {
-    RemoteError("Copy the local Power On link from your blaster’s app and paste it here.")
-  }
-
-  private static func item(_ id: String) -> [String: Any] {
-    [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "Otoha.IRWebhook",
-     kSecAttrAccount as String: id]
-  }
-
-  static func save(_ value: String, receiverId: String) throws -> LocalBlaster {
-    let url = try endpoint(value)
-    let query = item(receiverId)
-    var entry = query
-    entry[kSecValueData as String] = Data(url.absoluteString.utf8)
-    entry[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-    var result = SecItemAdd(entry as CFDictionary, nil)
-    if result == errSecDuplicateItem {
-      result = SecItemUpdate(query as CFDictionary, [kSecValueData: Data(url.absoluteString.utf8)] as CFDictionary)
-    }
-    guard result == errSecSuccess else { throw RemoteError("The webhook could not be saved on this iPhone.") }
-    return LocalBlaster(id: receiverId, label: "Custom IR blaster", kind: .webhook,
-                        host: url.host!, port: UInt16(url.port ?? (url.scheme?.lowercased() == "https" ? 443 : 80)))
-  }
-
-  static func forget(_ id: String) throws {
-    let result = SecItemDelete(item(id) as CFDictionary)
-    guard result == errSecSuccess || result == errSecItemNotFound else { throw RemoteError("The saved webhook could not be removed.") }
-  }
-
-  static func wake(_ id: String) async throws {
-    var query = item(id)
-    query[kSecReturnData as String] = true
-    var stored: CFTypeRef?
-    guard SecItemCopyMatching(query as CFDictionary, &stored) == errSecSuccess,
-          let data = stored as? Data, let text = String(data: data, encoding: .utf8) else {
-      throw RemoteError("The webhook could not be read. Forget this blaster and link it again.")
-    }
-    try await LocalHTTP.postWebhook(endpoint(text))
-  }
 }
 
 enum InfraredSignal {
@@ -174,8 +118,6 @@ enum DirectInfrared {
 
   static func operate(_ device: LocalBlaster, send: Bool) async throws {
     switch device.kind {
-    case .webhook:
-      if send { try await ManualIRWebhook.wake(device.id) }
     case .broadlink: try await BroadLink.operate(device, send: send)
     case .itach:
       try await Task.detached {
@@ -204,7 +146,6 @@ enum DirectInfrared {
   static func resolve(_ device: LocalBlaster) async throws -> LocalBlaster {
     let found: [LocalBlaster]
     switch device.kind {
-    case .webhook: return device
     case .broadlink: found = try await BroadLink.discover()
     case .itach: found = try await discover(itach: true)
     default: found = try await BonjourBlasters().search()

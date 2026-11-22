@@ -327,11 +327,6 @@ private struct InfraredSettings: View {
             )
           }
         }
-        if ["idle", "error", "choose"].contains(setup.phase) {
-          NavigationLink("Not listed") {
-            ManualInfraredSettings(receiverId: receiverId)
-          }
-        }
       } else {
         Text("Reconnect to your HK 3770 to manage infrared wake.")
       }
@@ -340,51 +335,6 @@ private struct InfraredSettings: View {
     .disabled(remote.busy)
     .onDisappear { searchTask?.cancel() }
     .navigationTitle("Infrared wake")
-    .navigationBarTitleDisplayMode(.inline)
-  }
-}
-
-private struct ManualInfraredSettings: View {
-  let receiverId: String
-  @EnvironmentObject private var remote: Remote
-  @Environment(\.dismiss) private var dismiss
-  @State private var url = ""
-  @State private var error = ""
-
-  var body: some View {
-    Form {
-      Section("Set up the On command") {
-        Text("Aim the emitter at your HK 3770. In the blaster’s app, select Power On for the receiver, or teach it the On button from the original remote. A power toggle can turn the receiver off.")
-        Text("Copy the local Power On link from your blaster or home automation app and paste it below. Otoha uses it when you tap Power on.")
-        DisclosureGroup("How do I get a webhook URL?") {
-          Text("Use a link from the blaster’s app, or create a webhook in a home automation hub that controls it. Set the webhook to send the saved On command when it receives an empty HTTP POST, then copy its local URL.")
-        }
-      }
-      Section {
-        SecureField("Paste webhook URL", text: $url)
-          .keyboardType(.URL)
-          .textInputAutocapitalization(.never)
-          .autocorrectionDisabled()
-        Button("Link blaster") {
-          error = ""
-          Task {
-            do {
-              try await remote.configureInfrared("manual", receiverId: receiverId, url: url)
-              dismiss()
-            } catch {
-              self.error = error.localizedDescription
-            }
-          }
-        }
-        .disabled(remote.busy || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        if !error.isEmpty { Text(error).foregroundStyle(.secondary) }
-      } header: {
-        Text("Power-on webhook URL")
-      } footer: {
-        Text("Saving links this blaster to your receiver. Use Power on when you’re ready to try it.")
-      }
-    }
-    .navigationTitle("Link an unlisted blaster")
     .navigationBarTitleDisplayMode(.inline)
   }
 }

@@ -6,19 +6,16 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
 }
 
 enum LocalHTTP {
-  private static let session = makeSession(requestTimeout: 2, resourceTimeout: 3)
-  private static let webhookSession = makeSession(requestTimeout: 8, resourceTimeout: 8)
-
-  private static func makeSession(requestTimeout: TimeInterval, resourceTimeout: TimeInterval) -> URLSession {
+  private static let session: URLSession = {
     let config = URLSessionConfiguration.ephemeral
     config.allowsCellularAccess = false
     config.httpCookieStorage = nil
     config.urlCache = nil
     config.httpShouldSetCookies = false
-    config.timeoutIntervalForRequest = requestTimeout
-    config.timeoutIntervalForResource = resourceTimeout
+    config.timeoutIntervalForRequest = 2
+    config.timeoutIntervalForResource = 3
     return URLSession(configuration: config, delegate: NoRedirects(), delegateQueue: nil)
-  }
+  }()
 
   static func allowed(_ url: URL, host: String) -> Bool {
     url.scheme == "http" && url.host == host && url.user == nil && url.password == nil &&
@@ -39,24 +36,6 @@ enum LocalHTTP {
       data.append(byte)
     }
     return data
-  }
-  static func postWebhook(_ url: URL) async throws {
-    guard let host = url.host, HomeInterface.all.contains(where: { $0.contains(host) }) else {
-      throw RemoteError("Join the controller’s Wi-Fi to use infrared wake.")
-    }
-    var request = URLRequest(url: url)
-    request.httpMethod = "POST"
-    let status: Int?
-    do {
-      let (stream, response) = try await webhookSession.bytes(for: request)
-      status = (response as? HTTPURLResponse)?.statusCode
-      stream.task.cancel()
-    } catch {
-      throw RemoteError("Could not reach the IR webhook. Check its local address and that the controller is on.")
-    }
-    guard let status, (200..<300).contains(status) else {
-      throw RemoteError("The webhook did not accept Power on. Check its POST trigger and saved command.")
-    }
   }
 }
 

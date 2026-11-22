@@ -10,10 +10,12 @@ struct LocalBlaster: Codable, Identifiable {
   var type: Int?
   var mac: [UInt8]?
   var locked: Bool?
+  var learnedOn: Data?
+  var learnedForModel: String?
 }
 
 enum InfraredSignal {
-  // HK 3770 discrete On: NEC1 device 128, subdevice 112, command 192.
+  // HK 3700/3770 handset discrete On: NEC1 device 128, subdevice 112, command 192.
   static let pulses: [Int] = {
     var result = [9024, 4512]
     for byte in [128, 112, 192, 63] {
@@ -79,7 +81,8 @@ enum InfraredSignal {
 }
 
 enum DirectInfrared {
-  static func discover(itach: Bool = false) async throws -> [LocalBlaster] {
+  static func discover(itach: Bool = false, learning: Bool = false) async throws -> [LocalBlaster] {
+    if learning { return unique(try await BroadLink.discover()) }
     if itach {
       guard LocalDiscovery.usesAnnouncements else {
         throw RemoteError("This version can’t discover an iTach. Choose another blaster in Power settings.")
@@ -150,7 +153,9 @@ enum DirectInfrared {
     case .itach: found = try await discover(itach: true)
     default: found = try await BonjourBlasters().search()
     }
-    guard let current = found.first(where: { $0.id == device.id }) else { throw RemoteError("Your linked blaster wasn’t found. Check its power and Wi-Fi.") }
+    guard var current = found.first(where: { $0.id == device.id }) else { throw RemoteError("Your linked blaster wasn’t found. Check its power and Wi-Fi.") }
+    current.learnedOn = device.learnedOn
+    current.learnedForModel = device.learnedForModel
     return current
   }
 

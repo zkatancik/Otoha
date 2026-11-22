@@ -15,12 +15,14 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as route:
     host = route.getsockname()[0]
 
 frames = []
-ir_operations = []
+learned_signal = bytes.fromhex("26 00 06 00 10 11 20 21 40 41")
 
 
 class Descriptor(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         body = b"<root><device><manufacturer>Harman Kardon</manufacturer><modelName>HK 3770</modelName><friendlyName>Test &amp; Stereo</friendlyName><UDN>uuid:otoha-test</UDN></device></root>"
+        if self.path == "/avr.xml":
+            body = body.replace(b"HK 3770", b"AVR 170").replace(b"otoha-test", b"otoha-avr")
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -33,7 +35,7 @@ class Descriptor(http.server.BaseHTTPRequestHandler):
 class Receiver(socketserver.StreamRequestHandler):
     def handle(self):
         while line := self.rfile.readline():
-            assert line == b"POST avr HTTP/1.1\r\n"
+            assert line.lower() == b"post avr http/1.1\r\n"
             headers = {}
             while (line := self.rfile.readline()) != b"\r\n":
                 name, value = line.decode().split(":", 1)
@@ -60,11 +62,10 @@ class Blaster(socketserver.DatagramRequestHandler):
         data = self.packet
         if data[38] == 6:
             reply = bytearray(128)
-            reply[52:54] = struct.pack("<H", 0x2737)
-            reply[58:64] = bytes.fromhex("554433221100")
+            reply[52:54] = struct.pack("<H", self.server.product)
+            reply[58:64] = self.server.mac[::-1]
         else:
             op = data[38]
-            ir_operations.append(op)
             assert struct.unpack_from("<H", data, 32)[0] == (0xbeaf + sum(data) - sum(data[32:34])) % 65536
             reply = bytearray(56)
             reply[:8] = data[:8]
@@ -74,17 +75,32 @@ class Blaster(socketserver.DatagramRequestHandler):
             else:
                 assert op == 0x6a
                 payload = self.crypt(data[56:], bytes(range(16)), True)
-                assert payload[:6] == bytes([2, 0, 0, 0, 0x26, 0])
-                # Compare the transmitted signal with the independent HK 3770 preset.
-                import sys
-                sys.path.insert(0, str(root / "scripts"))
-                from ir_preset import power_on_pulses
-                wave = bytearray()
-                for pulse in power_on_pulses():
-                    ticks = int(pulse / 32.84)
-                    wave.extend(bytes([ticks]) if ticks < 256 else b"\0" + struct.pack(">H", ticks))
-                assert payload[6:8] == struct.pack("<H", len(wave)) and payload[8:8+len(wave)] == wave
-                reply.extend(self.crypt(bytes(16), bytes(range(16))))
+                extended = self.server.product == 0x51da
+                if extended:
+                    size, = struct.unpack_from("<H", payload)
+                    assert 4 <= size <= len(payload) - 2
+                    payload = payload[2:2+size]
+                action, = struct.unpack_from("<I", payload)
+                self.server.actions.append(action)
+                answer = struct.pack("<I", action)
+                if action == 2:
+                    count, = struct.unpack_from("<H", payload, 6)
+                    self.server.sent.append(payload[4:8+count])
+                elif action == 3:
+                    self.server.polls = 0
+                else:
+                    assert action == 4
+                    self.server.polls += 1
+                    if self.server.polls <= 2:
+                        struct.pack_into("<h", reply, 34, [-5, -10][self.server.polls-1])
+                    elif self.server.bad_capture:
+                        answer += bytes.fromhex("b2 00 04 00 11 22 33 44")
+                        self.server.bad_capture = False
+                    else:
+                        answer += learned_signal
+                if extended:
+                    answer = struct.pack("<H", len(answer)) + answer
+                reply.extend(self.crypt(answer + bytes(-len(answer) % 16), bytes(range(16))))
             struct.pack_into("<H", reply, 32, (0xbeaf + sum(reply)) % 65536)
         self.wfile.write(reply)
 
@@ -94,16 +110,37 @@ class TCPFixture(socketserver.ThreadingTCPServer):
     daemon_threads = True
 
 
+class RMFixture(socketserver.UDPServer):
+    def __init__(self, product, mac):
+        super().__init__((host, 0), Blaster)
+        self.product = product
+        self.mac = bytes.fromhex(mac)
+        self.sent = []
+        self.actions = []
+        self.bad_capture = product == 0x51da
+
+
 with tempfile.TemporaryDirectory() as folder, http.server.ThreadingHTTPServer((host, 0), Descriptor) as web, \
-        TCPFixture((host, 10025), Receiver) as stereo, socketserver.UDPServer((host, 0), Blaster) as ir:
-    for server in (web, stereo, ir):
+        TCPFixture((host, 10025), Receiver) as stereo, RMFixture(0x2737, "001122334455") as mini, \
+        RMFixture(0x51da, "0123456789ab") as rm4:
+    for server in (web, stereo, mini, rm4):
         threading.Thread(target=server.serve_forever, daemon=True).start()
     files = ["HarmanProtocol", "HarmanNetwork", "LocalNetwork", "BroadLink", "LocalInfrared", "Remote"]
     binary = Path(folder) / "check"
     shutil.copy(root / "ios/Otoha/receiver-profiles.json", folder)
     subprocess.run(["xcrun", "swiftc", "-o", str(binary), *[str(root / f"ios/Otoha/{name}.swift") for name in files],
                     str(Path(__file__).with_name("DirectRemoteCheck.swift"))], check=True)
-    subprocess.run([str(binary), host, str(web.server_port), str(ir.server_address[1])], check=True, timeout=40)
+    subprocess.run([str(binary), host, str(web.server_port), str(mini.server_address[1]), str(rm4.server_address[1])], check=True, timeout=45)
     assert frames == [("volume-up", ""), ("source-selection", "USB"), ("source-selection", "iPod"),
                       ("harman_volume", ""), ("harman_volume", ""), ("power-on", "")]
-    assert ir_operations == [0x65, 0x65, 0x6a]
+    import sys
+    sys.path.insert(0, str(root / "scripts"))
+    from ir_preset import power_on_pulses
+    wave = bytearray()
+    for pulse in power_on_pulses():
+        ticks = int(pulse / 32.84)
+        wave.extend(bytes([ticks]) if ticks < 256 else b"\0" + struct.pack(">H", ticks))
+    preset = bytes([0x26, 0]) + struct.pack("<H", len(wave)) + wave
+    assert mini.sent == [preset, learned_signal] and rm4.sent == [learned_signal]
+    assert mini.actions == [2, 3, 4, 4, 4, 2]
+    assert rm4.actions == [3, 4, 4, 4, 3, 4, 4, 4, 2]

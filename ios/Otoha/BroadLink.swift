@@ -2,7 +2,7 @@ import CommonCrypto
 import Foundation
 
 // Local BroadLink RM protocol as used by python-broadlink 0.19.0.
-// Only discovery, local authorization and a single infrared transmission are needed.
+// Learning uses the same local session as sending a stored infrared signal.
 enum BroadLink {
   private static let initialKey: [UInt8] = [9,118,40,52,63,233,158,35,118,92,21,19,172,207,139,2]
   private static let iv: [UInt8] = [86,46,23,153,109,9,61,40,221,179,186,105,90,46,111,88]
@@ -89,8 +89,10 @@ enum BroadLink {
     throw RemoteError("The blaster didn’t answer. Check its power and try again.")
   }
 
+  private enum ReplyError: Error { case noSignal }
+
   private static func command(_ op: Int, body: [UInt8], device: LocalBlaster, key: [UInt8], session: [UInt8],
-                              socket: LocalSocket) throws -> [UInt8] {
+                              socket: LocalSocket, polling: Bool = false) throws -> [UInt8] {
     guard let mac = device.mac, let type = device.type else { throw RemoteError("Find your blaster again.") }
     var packet = [UInt8](repeating: 0, count: 56)
     packet.replaceSubrange(0..<8, with: magic)
@@ -107,39 +109,94 @@ enum BroadLink {
     guard reply.count >= 56, reply.starts(with: magic) else { throw RemoteError("Unexpected blaster reply.") }
     let expected = word(reply, 32)
     put(0, into: &reply, at: 32)
-    guard checksum(reply) == expected, word(reply, 34) == 0 else {
+    guard checksum(reply) == expected else { throw RemoteError("Invalid blaster reply.") }
+    if polling, [0xfffb, 0xfff6].contains(word(reply, 34)) { throw ReplyError.noSignal }
+    guard word(reply, 34) == 0 else {
       throw RemoteError("BroadLink declined local control. Turn off Lock device in the BroadLink app.")
     }
     return try crypt(Array(reply.dropFirst(56)), key: key, decrypt: true)
   }
 
+  private struct Session {
+    let socket: LocalSocket
+    let device: LocalBlaster
+    let key, id: [UInt8]
+    let extended: Bool
+
+    func request(_ action: UInt8, data: [UInt8] = []) throws -> [UInt8] {
+      var payload = [action, 0, 0, 0] + data
+      if extended {
+        var size: [UInt8] = [0, 0]
+        put(payload.count, into: &size, at: 0)
+        payload = size + payload
+      }
+      return try command(0x6a, body: payload, device: device, key: key, session: id, socket: socket, polling: action == 4)
+    }
+  }
+
+  private static func open(_ selected: LocalBlaster) throws -> Session {
+    guard let iface = HomeInterface.all.first(where: { $0.contains(selected.host) }) else { throw RemoteError("Join your home Wi-Fi.") }
+    let socket = try LocalSocket(type: SOCK_DGRAM, interface: iface)
+    try socket.bind(iface.host)
+    let reply = try exchange(socket, selected, hello(iface, socket.port))
+    guard let current = device(reply), current.id == selected.id, let type = current.type else {
+      throw RemoteError("The blaster moved. Find it again.")
+    }
+    guard current.locked != true else { throw RemoteError("Turn off Lock device for this blaster in the BroadLink app, then try again.") }
+    var auth = [UInt8](repeating: 0, count: 80)
+    auth.replaceSubrange(4..<20, with: repeatElement(0x31, count: 16))
+    auth[30] = 1; auth[45] = 1
+    auth.replaceSubrange(48..<54, with: "Test 1".utf8)
+    let answer = try command(0x65, body: auth, device: current, key: initialKey, session: [0,0,0,0], socket: socket)
+    guard answer.count >= 20 else { throw RemoteError("The blaster couldn’t authorize this iPhone.") }
+    return Session(socket: socket, device: current, key: Array(answer[4..<20]),
+                   id: Array(answer[0..<4]), extended: products[type]?.1 == true)
+  }
+
   static func operate(_ selected: LocalBlaster, send: Bool) async throws {
-    try await Task.detached {
-      guard let iface = HomeInterface.all.first(where: { $0.contains(selected.host) }) else { throw RemoteError("Join your home Wi-Fi.") }
-      let socket = try LocalSocket(type: SOCK_DGRAM, interface: iface)
-      try socket.bind(iface.host)
-      let reply = try exchange(socket, selected, hello(iface, socket.port))
-      guard let current = device(reply), current.id == selected.id, let type = current.type else {
-        throw RemoteError("The blaster moved. Find it again.")
-      }
-      guard current.locked != true else { throw RemoteError("Turn off Lock device for this blaster in the BroadLink app, then try again.") }
-      var auth = [UInt8](repeating: 0, count: 80)
-      auth.replaceSubrange(4..<20, with: repeatElement(0x31, count: 16))
-      auth[30] = 1; auth[45] = 1
-      auth.replaceSubrange(48..<54, with: "Test 1".utf8)
-      let answer = try command(0x65, body: auth, device: current, key: initialKey, session: [0,0,0,0], socket: socket)
-      guard answer.count >= 20 else { throw RemoteError("The blaster couldn’t authorize this iPhone.") }
+    try await localNetworkTask {
+      let session = try open(selected)
       if send {
-        let waveform = InfraredSignal.broadLink
-        var payload: [UInt8] = [2,0,0,0] + waveform
-        if products[type]?.1 == true {
-          var size: [UInt8] = [0,0]
-          put(payload.count, into: &size, at: 0)
-          payload = size + payload
-        }
-        _ = try command(0x6a, body: payload, device: current, key: Array(answer[4..<20]),
-                        session: Array(answer[0..<4]), socket: socket)
+        let waveform = selected.learnedOn.map { Array($0) } ?? InfraredSignal.broadLink
+        try Task.checkCancellation()
+        _ = try session.request(2, data: waveform)
       }
-    }.value
+    }
+  }
+
+  static func validLearnedSignal(_ signal: Data) -> Bool {
+    let header = Array(signal.prefix(4))
+    return (8...4100).contains(signal.count) && header[0] == 0x26 && word(header, 2) == signal.count - 4
+  }
+
+  static func learnPowerOn(_ selected: LocalBlaster, listening: @escaping @Sendable () -> Void) async throws -> Data {
+    try await localNetworkTask {
+      let session = try open(selected)
+      try Task.checkCancellation()
+      _ = try session.request(3)
+      listening()
+      let deadline = LocalSocket.now + 25
+      while LocalSocket.now < deadline {
+        Thread.sleep(forTimeInterval: 0.4)
+        try Task.checkCancellation()
+        let reply: [UInt8]
+        do { reply = try session.request(4) } catch ReplyError.noSignal { continue }
+        let offset = session.extended ? 6 : 4
+        guard reply.count >= offset + 4 else { continue }
+        if session.extended {
+          let size = word(reply, 0)
+          guard size >= 8, size + 2 <= reply.count else { continue }
+        }
+        if reply[offset] == 0 { continue }
+        let size = word(reply, offset + 2)
+        let end = offset + 4 + size
+        guard end <= reply.count, !session.extended || end <= word(reply, 0) + 2,
+              validLearnedSignal(Data(reply[offset..<end])) else {
+          throw RemoteError("Unexpected infrared signal. Try the receiver’s Power On button again.")
+        }
+        return Data(reply[offset..<end])
+      }
+      throw RemoteError("No signal received. Aim the handset at the blaster and try learning again.")
+    }
   }
 }

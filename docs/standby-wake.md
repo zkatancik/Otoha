@@ -6,14 +6,14 @@ Harman documents several ways to wake these products, including the original han
 
 | Model | Power-on evidence | Infrared setup in Otoha |
 | --- | --- | --- |
-| **HK 3700** | Harman describes app power-on while the receiver is on the network. An owner using the HK command protocol observed Ethernet drop immediately after sending Off. The original handset or front-panel button wakes the unit from standby. [Manual, pp. 9, 13, 16][stereo] · [HK 3700 owner’s test][3700-test] | Hidden. A model-specific IR signal has not been verified for Otoha. |
-| **HK 3770** | The same manual describes app power-on. An HK 37xx integration author reports port 10025 closes in standby. Otoha’s own awake HK 3770 reported no Wake-on-LAN magic-packet support. That flag alone cannot establish what the control port does in standby. [Manual, pp. 9, 13, 16][stereo] · [Integration author’s observations][3770-test] · [Otoha hardware notes][hardware] | Optional only if the owner confirms the handset wakes their receiver and Wi-Fi power-on fails in the standby mode they use. Otoha has a discrete On preset for this model. [IR setup](infrared-wake.md) |
+| **HK 3700** | Harman describes app power-on while the receiver is on the network. An owner using the HK command protocol observed Ethernet drop immediately after sending Off. The original handset or front-panel button wakes the unit from standby. [Manual, pp. 9, 13, 16][stereo] · [HK 3700 owner’s test][3700-test] | Optional after connection. The HK 3770 service parts list identifies the shared HK 37xx handset as CARTHK3700. Otoha uses the HK 3770 discrete On preset on that basis. [Service manual][3700-handset] |
+| **HK 3770** | The same manual describes app power-on. An HK 37xx integration author reports port 10025 closes in standby. Otoha’s own awake HK 3770 reported no Wake-on-LAN magic-packet support. That flag alone cannot establish what the control port does in standby. [Manual, pp. 9, 13, 16][stereo] · [Integration author’s observations][3770-test] · [Otoha hardware notes][hardware] | Optional after connection. Otoha uses the discrete On preset for the shared HK 37xx handset. [IR setup](infrared-wake.md) |
 
 Harman’s EU service manual also lists Bluetooth audio as a way to wake the HK 3770 from standby. The consumer manual lists the power and source buttons. Bluetooth audio would be a separate wake path from Otoha’s Wi-Fi power button, and this review did not test that behavior on a receiver. [HK 3770 service manual, p. 4](https://device.report/m/00d7e4bfff65b53b891034092c9a7951c8c9d35b4145cc02d5d88245e44bb71f.pdf#page=4) · [Owner’s manual, pp. 5, 13][stereo]
 
 ## AV receivers
 
-The IR setup stays hidden for every AVR below. When a manual describes the Harman Remote app turning on a network-connected AVR, it does not identify which power states continue accepting that command. Starting audio playback is a separate operation that can switch the source.
+Otoha offers optional blaster setup after connecting an AVR 170/1700, 370/3700 or 151S/1510S, including their catalogued aliases. These families have reported standby disconnections and handset On buttons. The receiver’s original handset teaches a BroadLink RM the command for that unit. The offer is hidden on other AVRs where the evidence for loss of Wi-Fi remote power-on is inconclusive. [AVR 170 handset][170] · [AVR 370 handset][270] · [AVR 151S handset][151s-handset] When a manual describes the Harman Remote app turning on a network-connected AVR, it does not identify which power states continue accepting that command. Starting audio playback is a separate operation that can switch the source.
 
 | Models | Documented wake behavior |
 | --- | --- |
@@ -51,6 +51,8 @@ The original remote can wake these systems from full Standby with AC connected a
 Link and identify the receiver while it is on. With the iPhone on the same Wi-Fi, place the receiver into the specific state being tested. Record the front-panel indication, standby settings, firmware and elapsed time. Attempt Wi-Fi Power On and observe whether the receiver actually turns on. Repeat after any automatic transition to deeper standby. If Wi-Fi fails but the original handset wakes the unit, record that result separately. A missed discovery packet, an outage, an open port or a successful write by itself does not establish a power transition. [Protocol and readback limits](receiver.md#feedback-and-power)
 
 [stereo]: https://support.harmankardon.com/on/demandware.static/-/Sites-masterCatalog_Harman/default/dwc89ee311/pdfs/HK3700_3770_OM_EN.pdf#page=16
+[3700-handset]: https://device.report/m/00d7e4bfff65b53b891034092c9a7951c8c9d35b4145cc02d5d88245e44bb71f.pdf
+[151s-handset]: https://www.harmankardon.com/on/demandware.static/-/Sites-masterCatalog_Harman/default/dwd8b8cb4d/pdfs/AVR1510S_OM_EN.pdf#page=9
 [3700-test]: https://github.com/KarimGeiger/HKAPI/commit/6036d4f42b94f23cf62b1186ca95587f42e10e04#commitcomment-16323929
 [3770-test]: https://github.com/wongy123/harman-kardon-stereo-receiver/blob/cf38559ae2a9034518530d842e096b2ef5584f28/README.md#power--wake-on-lan-caveat
 [hardware]: receiver.md#checks-on-the-connected-receiver

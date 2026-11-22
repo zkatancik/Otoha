@@ -5,14 +5,15 @@ Otoha turns your iPhone into a Wi-Fi remote for a compatible Harman Kardon recei
 ## Get connected
 
 1. Turn on your stereo and connect it to your home router. Use a network cable if the stereo requires one. Join the same home Wi-Fi on your iPhone.
-2. Open Otoha and tap **Find my stereo**. Choose **Allow** when your iPhone asks to find devices on the local network.
-3. Tap **Link** beside your stereo’s name. Choose **Use defaults** to open the remote, or pick your own controls.
+2. Open Otoha. On **Select a device**, allow local network access, then tap your stereo’s name.
+3. Tap **Connect**. Otoha checks that the selected device answers. On models that can lose their network connection in standby, Otoha offers an optional IR blaster for power-on. Choose **Connect an IR blaster** or **Not now**.
+4. Choose the controls you want on your remote, or tap **Use defaults**.
 
-Otoha remembers the stereo on this iPhone. To change it, open **Settings → Locate devices**. If the list is empty, check that the stereo is fully on, use your regular home Wi-Fi, and enable **Settings → Privacy & Security → Local Network → Otoha** on the phone. Then search again.
+Otoha remembers your stereo. To switch, open **Settings → Search for devices**, select a device, and tap **Connect**. If it’s missing, check that it’s on, join the same home Wi-Fi, and allow Otoha under **Settings → Privacy & Security → Local Network** on your iPhone.
 
 ## Optional infrared wake
 
-Try **Power on** over Wi-Fi first. If your HK 3770 responds to Otoha while awake but only its handset wakes it from standby, open **Power → Power on troubleshooting**. Otoha can use a compatible infrared blaster to send the handset’s On signal for that model. [Blaster instructions](docs/infrared-wake.md) · [Standby behavior by model](docs/standby-wake.md)
+An IR blaster, such as a BroadLink RM mini 3, sends the same infrared signal as your handheld remote. It lets the phone wake a receiver that has dropped off the home network in standby. If Wi-Fi power-on already works for you, choose **Not now**. You can add a blaster later under **Power → Infrared wake** on eligible models. [Blaster instructions](docs/infrared-wake.md) · [Standby behavior by model](docs/standby-wake.md)
 
 ## Personalize your remote
 

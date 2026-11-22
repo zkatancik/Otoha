@@ -8,7 +8,6 @@ import UIKit
 struct InfraredStatus {
   let receiverId, phase: String
   var label: String?
-  var message: String?
   var devices: [LocalBlaster]?
 }
 
@@ -35,6 +34,7 @@ struct Receiver {
   var canWake: Bool { receiver?.actions.contains("wake") == true || receiver?.irWake == true }
 
   private let discover: () async throws -> [HKDevice]
+  private let discoverBlasters: (Bool, Bool) async throws -> [LocalBlaster]
   private let defaults: UserDefaults
   private let monitor = NWPathMonitor()
   private var lastPath: NWPath?
@@ -48,9 +48,23 @@ struct Receiver {
   private var feedbackTask: Task<Void, Never>?
   private static let modes = ["High", "Low", "Off"]
   private static let selectionKey = "directReceiver.v1"
+  private static let pendingOfferKey = "pendingInfraredOffer.v1"
 
-  init(defaults: UserDefaults = .standard, discover: @escaping () async throws -> [HKDevice] = HarmanNetwork.discover) {
+  var hasPendingInfraredOffer: Bool {
+    guard let state = receiver, state.infrared != nil, !state.irWake else { return false }
+    return defaults.string(forKey: Self.pendingOfferKey) == state.device.id
+  }
+
+  func finishInfraredOffer(for id: String) {
+    guard receiver?.device.id == id else { return }
+    defaults.set(true, forKey: "infraredOfferSeen." + id)
+    defaults.removeObject(forKey: Self.pendingOfferKey)
+  }
+
+  init(defaults: UserDefaults = .standard, discover: @escaping () async throws -> [HKDevice] = HarmanNetwork.discover,
+       discoverBlasters: @escaping (Bool, Bool) async throws -> [LocalBlaster] = DirectInfrared.discover) {
     self.discover = discover
+    self.discoverBlasters = discoverBlasters
     self.defaults = defaults
     struct OldEquipment: Decodable { let device: HKDevice? }
     let saved = defaults.data(forKey: Self.selectionKey).flatMap { try? JSONDecoder().decode(HKDevice.self, from: $0) }
@@ -68,15 +82,23 @@ struct Receiver {
   deinit { monitor.cancel() }
 
   private func blaster(for device: HKDevice) -> LocalBlaster? {
-    defaults.data(forKey: "directIR." + device.id).flatMap { try? JSONDecoder().decode(LocalBlaster.self, from: $0) }
+    guard let method = device.infraredWake, let bytes = defaults.data(forKey: "directIR." + device.id),
+          let saved = try? JSONDecoder().decode(LocalBlaster.self, from: bytes) else { return nil }
+    switch method {
+    case .hk37xx:
+      guard saved.learnedOn == nil, saved.learnedForModel == nil else { return nil }
+    case .learnOn:
+      guard saved.kind == .broadlink, saved.learnedForModel == device.model,
+            let signal = saved.learnedOn, BroadLink.validLearnedSignal(signal) else { return nil }
+    }
+    return saved
   }
 
   private func snapshot(_ device: HKDevice) -> Receiver? {
     guard let profile = HarmanCatalog.shared.profiles[device.profile] else { return nil }
     var result = Receiver(device: device, sources: profile.sources.filter { device.model != "HK 3700" || $0.id != "bluetooth" },
                           actions: profile.keys.keys.filter { device.model == "HK 3770" || $0 != "harman" })
-    // The bundled discrete infrared On signal is for this receiver only.
-    if device.profile == "stereo", device.model == "HK 3770" {
+    if device.infraredWake != nil {
       let ir = blaster(for: device)
       let label = ir?.label
       result.infrared = InfraredStatus(receiverId: device.id, phase: label == nil ? "idle" : "linked", label: label)
@@ -142,6 +164,11 @@ struct Receiver {
     }
     try check(version)
     try accept(device)
+    if device.infraredWake != nil, blaster(for: device) == nil, !defaults.bool(forKey: "infraredOfferSeen." + id) {
+      defaults.set(id, forKey: Self.pendingOfferKey)
+    } else {
+      defaults.removeObject(forKey: Self.pendingOfferKey)
+    }
   }
 
   func refresh() async {
@@ -253,8 +280,8 @@ struct Receiver {
 
   func configureInfrared(_ action: String, receiverId: String, id: String? = nil) async throws {
     guard !busy, volumeStep == nil, receiver?.infrared?.receiverId == receiverId,
-          let device = receiver?.device, device.id == receiverId else {
-      throw RemoteError("Open infrared setup for your HK 3770 again.")
+          let device = receiver?.device, device.id == receiverId, let method = device.infraredWake else {
+      throw RemoteError("Open infrared setup for the connected device again.")
     }
     busy = true
     defer { busy = false }
@@ -267,11 +294,13 @@ struct Receiver {
       return
     }
     guard blaster(for: device) == nil else { throw RemoteError("Forget the linked blaster before adding another one.") }
+    let previous = receiver?.infrared
     do {
-      let choice: LocalBlaster
+      var choice: LocalBlaster
       if action == "search" || action == "itach" {
+        guard action != "itach" || method == .hk37xx else { throw RemoteError("Choose a BroadLink RM to learn Power On.") }
         receiver?.infrared = InfraredStatus(receiverId: receiverId, phase: "searching")
-        let devices = try await DirectInfrared.discover(itach: action == "itach")
+        let devices = try await discoverBlasters(action == "itach", method == .learnOn)
         try check(version)
         guard let first = devices.first else { throw RemoteError("No blasters found. Check the blaster’s power and Wi-Fi, then search again.") }
         if devices.count > 1 {
@@ -279,16 +308,35 @@ struct Receiver {
           return
         }
         choice = first
-      } else if action == "select", let candidate = receiver?.infrared?.devices?.first(where: { $0.id == id }) {
+      } else if action == "select", previous?.phase == "choose", let candidate = previous?.devices?.first(where: { $0.id == id }) {
+        choice = candidate
+      } else if action == "learn", method == .learnOn, previous?.phase == "readyToLearn", let candidate = previous?.devices?.first {
         choice = candidate
       } else { throw RemoteError("Find your blaster again.") }
-      receiver?.infrared = InfraredStatus(receiverId: receiverId, phase: "linking")
-      try await DirectInfrared.operate(choice, send: false)
+      if method == .learnOn {
+        guard choice.kind == .broadlink else { throw RemoteError("Choose a BroadLink RM to learn Power On.") }
+        if action != "learn" {
+          receiver?.infrared = InfraredStatus(receiverId: receiverId, phase: "readyToLearn", devices: [choice])
+          return
+        }
+        receiver?.infrared = InfraredStatus(receiverId: receiverId, phase: "preparing")
+        choice.learnedOn = try await BroadLink.learnPowerOn(choice) {
+          Task { @MainActor in
+            guard self.epoch == version, self.receiver?.infrared?.phase == "preparing" else { return }
+            self.receiver?.infrared = InfraredStatus(receiverId: receiverId, phase: "learning")
+          }
+        }
+        choice.learnedForModel = device.model
+      } else {
+        receiver?.infrared = InfraredStatus(receiverId: receiverId, phase: "linking")
+        try await DirectInfrared.operate(choice, send: false)
+      }
       try check(version)
       defaults.set(try JSONEncoder().encode(choice), forKey: key)
       receiver?.infrared = InfraredStatus(receiverId: receiverId, phase: "linked", label: choice.label)
+      finishInfraredOffer(for: receiverId)
     } catch {
-      if version == epoch { receiver?.infrared = snapshot(device)?.infrared }
+      if version == epoch { receiver?.infrared = previous }
       throw error
     }
   }

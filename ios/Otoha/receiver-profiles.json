@@ -2,11 +2,13 @@
   "models": {
     "HK3700": {
       "profile": "stereo",
-      "model": "HK 3700"
+      "model": "HK 3700",
+      "infraredWake": "hk37xx"
     },
     "HK3770": {
       "profile": "stereo",
-      "model": "HK 3770"
+      "model": "HK 3770",
+      "infraredWake": "hk37xx"
     },
     "AVR151": {
       "profile": "avr",
@@ -34,11 +36,13 @@
     },
     "AVR151S": {
       "profile": "avr",
-      "model": "AVR 151S"
+      "model": "AVR 151S",
+      "infraredWake": "learnOn"
     },
     "AVR1510S": {
       "profile": "avr",
-      "model": "AVR 1510S"
+      "model": "AVR 1510S",
+      "infraredWake": "learnOn"
     },
     "AVR161S": {
       "profile": "avr",
@@ -58,11 +62,13 @@
     },
     "AVR170": {
       "profile": "avr",
-      "model": "AVR 170"
+      "model": "AVR 170",
+      "infraredWake": "learnOn"
     },
     "AVR1700": {
       "profile": "avr",
-      "model": "AVR 1700"
+      "model": "AVR 1700",
+      "infraredWake": "learnOn"
     },
     "AVR270": {
       "profile": "avr",
@@ -74,11 +80,13 @@
     },
     "AVR370": {
       "profile": "avr",
-      "model": "AVR 370"
+      "model": "AVR 370",
+      "infraredWake": "learnOn"
     },
     "AVR3700": {
       "profile": "avr",
-      "model": "AVR 3700"
+      "model": "AVR 3700",
+      "infraredWake": "learnOn"
     },
     "AVR151/1510": {
       "profile": "avr",
@@ -86,7 +94,8 @@
     },
     "AVR151S/1510S": {
       "profile": "avr",
-      "model": "AVR 151S/1510S"
+      "model": "AVR 151S/1510S",
+      "infraredWake": "learnOn"
     },
     "AVR161/1610": {
       "profile": "avr",
@@ -106,7 +115,8 @@
     },
     "AVR170/1700": {
       "profile": "avr",
-      "model": "AVR 170/1700"
+      "model": "AVR 170/1700",
+      "infraredWake": "learnOn"
     },
     "AVR270/2700": {
       "profile": "avr",
@@ -114,7 +124,8 @@
     },
     "AVR370/3700": {
       "profile": "avr",
-      "model": "AVR 370/3700"
+      "model": "AVR 370/3700",
+      "infraredWake": "learnOn"
     },
     "AVR151/230": {
       "profile": "avr",
@@ -142,11 +153,13 @@
     },
     "AVR170/230C": {
       "profile": "avr",
-      "model": "AVR 170/230C"
+      "model": "AVR 170/230C",
+      "infraredWake": "learnOn"
     },
     "AVR151S/230C": {
       "profile": "avr",
-      "model": "AVR 151S/230C"
+      "model": "AVR 151S/230C",
+      "infraredWake": "learnOn"
     },
     "AVR161S/230C": {
       "profile": "avr",

@@ -22,7 +22,7 @@ enum Palette {
 }
 
 enum Panel: String, Identifiable {
-  case power, inputs, mode, connection, frontPage
+  case power, inputs, mode, connection, infraredOffer, frontPage
   var id: Self { self }
 }
 
@@ -87,12 +87,12 @@ struct RemoteView: View {
           ContentUnavailableView {
             VStack(spacing: 16) {
               OtohaSignature()
-              Text("Find your stereo")
+              Text("Select a device")
             }
           } description: {
             Text("Turn on your Harman Kardon stereo and join the same home Wi-Fi on your iPhone. Your stereo can also use a network cable to the router.")
           } actions: {
-            Button("Find my stereo") { panel = .connection }.buttonStyle(.borderedProminent)
+            Button("Select a device") { panel = .connection }.buttonStyle(.borderedProminent)
           }
         }
       }
@@ -145,9 +145,8 @@ struct RemoteView: View {
         page = 0
         panel = nil
       }.environmentObject(remote)
-        .interactiveDismissDisabled((item == .frontPage && saved == nil))
         .presentationDetents(
-          [.connection, .inputs, .frontPage].contains(item) ? [.large] : [.medium, .large]
+          [.connection, .inputs, .infraredOffer, .frontPage].contains(item) ? [.large] : [.medium, .large]
         )
         .presentationDragIndicator(.visible)
     }
@@ -156,6 +155,9 @@ struct RemoteView: View {
       page = 0
       speakerLevel = 0
       if panel == .frontPage && editingDeviceID != id { panel = nil } else { offerSetup() }
+    }
+    .onChange(of: online) { _, connected in
+      if connected && remote.hasPendingInfraredOffer { offerSetup() }
     }
     .sensoryFeedback(.impact(weight: .light), trigger: remote.pulse)
     .task(id: scene) {
@@ -177,7 +179,11 @@ struct RemoteView: View {
   }
   private func offerSetup() {
     guard panel == nil else { return }
-    if saved == nil { editLayout() }
+    if deviceID == nil { panel = .connection }
+    else if remote.hasPendingInfraredOffer {
+      if online { panel = .infraredOffer }
+    }
+    else if saved == nil { editLayout() }
   }
 
   private func dashboard(_ device: Receiver) -> some View {

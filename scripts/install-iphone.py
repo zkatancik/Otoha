@@ -44,4 +44,4 @@ try:
     subprocess.run(["xcrun", "devicectl", "device", "process", "launch", "--device", device, "com.zkatancik.otoha"], check=True)
 except subprocess.CalledProcessError:
     sys.exit("Xcode could not finish. Follow any trust, signing, or Developer Mode prompt on your Mac or iPhone.")
-print("Otoha is installed. Turn on your receiver, open Find my stereo on your iPhone, and choose its name.")
+print("Otoha is installed. Turn on your receiver, select it in Otoha on your iPhone, then tap Connect.")

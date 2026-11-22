@@ -1,4 +1,4 @@
-"""The HK 3770 discrete Power On preset shared by the IR transports."""
+"""The HK 3700/3770 discrete Power On preset shared by the IR transports."""
 
 # IRDB: NEC1, device 128, subdevice 112, function 192 and its complement.
 POWER_ON_BYTES = (128, 112, 192, 192 ^ 0xFF)

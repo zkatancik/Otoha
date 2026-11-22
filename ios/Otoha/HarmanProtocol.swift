@@ -11,7 +11,14 @@ struct HKDevice: Codable, Identifiable {
   var descriptionURL: URL?
   var renderer: URL?
   var advertised: Bool?
+
+  var infraredWake: InfraredWakeMethod? {
+    guard let entry = HarmanCatalog.shared.model(model), entry.profile == profile else { return nil }
+    return entry.infraredWake
+  }
 }
+
+enum InfraredWakeMethod: String, Decodable { case hk37xx, learnOn }
 
 struct ReceiverInput: Codable {
   let id, name, detail: String
@@ -40,7 +47,10 @@ struct HarmanProfile: Decodable {
 }
 
 struct HarmanCatalog: Decodable {
-  struct Model: Decodable { let model, profile: String }
+  struct Model: Decodable {
+    let model, profile: String
+    let infraredWake: InfraredWakeMethod?
+  }
   let models: [String: Model]
   let profiles: [String: HarmanProfile]
 

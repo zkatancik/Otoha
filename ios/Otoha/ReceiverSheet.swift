@@ -12,6 +12,7 @@ struct ReceiverSheet: View {
   @State private var findingReceiver = false
   @State private var receiverMessage = ""
   @State private var devices: [HKDevice] = []
+  @State private var selectedDeviceID: String?
   @State private var working = false
   @State private var draft: RemoteArrangement
 
@@ -34,6 +35,25 @@ struct ReceiverSheet: View {
       List {
         switch panel {
         case .connection: connections
+        case .infraredOffer:
+          if let state = remote.receiver, state.infrared != nil {
+            let skip = {
+              remote.finishInfraredOffer(for: state.device.id)
+              dismiss()
+            }
+            Section {
+              Text("Your " + state.model + " can disconnect from your home network in standby. When that happens, your iPhone can’t turn it on over Wi-Fi.")
+              Text("An IR blaster, such as a BroadLink RM mini 3, sends the same infrared light signal as the On button on your handheld remote.")
+            }
+            Section {
+              NavigationLink("Connect an IR blaster") {
+                InfraredSettings(receiverId: state.device.id, skip: skip)
+              }
+              Button("Not now", action: skip)
+            } footer: {
+              Text("You can set this up later under Power → Infrared wake.")
+            }
+          }
         case .frontPage:
           if let equipment {
             Section {
@@ -125,15 +145,16 @@ struct ReceiverSheet: View {
             NavigationLink {
               InfraredSettings(receiverId: setup.receiverId)
             } label: {
-              Label(
-                remote.receiver?.irWake == true ? "Infrared wake" : "Power on troubleshooting",
-                systemImage: remote.receiver?.irWake == true ? "dot.radiowaves.left.and.right" : "questionmark.circle")
+              Label("Infrared wake", systemImage: "dot.radiowaves.left.and.right")
             }
           }
         }
-        if let note = remote.feedback, ![.connection, .frontPage].contains(panel) {
+        if let note = remote.feedback, ![.connection, .infraredOffer, .frontPage].contains(panel) {
           Text(note).font(.footnote).foregroundStyle(.secondary)
         }
+      }
+      .safeAreaInset(edge: .bottom) {
+        if panel == .connection { connectBar }
       }
       .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -151,8 +172,8 @@ struct ReceiverSheet: View {
             Button(savedPage == nil ? "Open remote" : "Save") { savePage(draft) }.disabled(
               draft.modules.isEmpty)
           }
-        } else {
-          ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+        } else if panel != .infraredOffer && (panel != .connection || equipment != nil) {
+          ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(working) }
         }
       }
       .task {
@@ -161,13 +182,21 @@ struct ReceiverSheet: View {
       }
       .tint(Palette.controlTint)
     }
+    .onChange(of: remote.receiver?.irWake) { _, linked in
+      if panel == .infraredOffer && linked == true {
+        remote.notify("IR blaster connected for Power On.")
+        dismiss()
+      }
+    }
+    .interactiveDismissDisabled(working || panel == .infraredOffer || (panel == .connection && equipment == nil) || (panel == .frontPage && savedPage == nil))
   }
   private var title: String {
     switch panel {
     case .power: "Power"
     case .mode: "Sync Harman Volume"
     case .inputs: "More inputs"
-    case .connection: equipment == nil ? "Find your stereo" : "Settings"
+    case .connection: equipment == nil ? "Select a device" : "Settings"
+    case .infraredOffer: "Connect an IR blaster?"
     case .frontPage: savedPage == nil ? "Set up remote" : "Customize remote"
     }
   }
@@ -177,51 +206,82 @@ struct ReceiverSheet: View {
         Button("Customize remote", systemImage: "slider.horizontal.3", action: editPage)
       }
     }
-    Section("Your stereo") {
-      if let device = remote.receiver?.device {
-        LabeledContent("Linked device", value: device.name)
-      }
-      LabeledContent("Connection", value: remote.activity)
-      Button(findingReceiver ? "Locating…" : "Locate devices") { Task { await locate() } }
-        .disabled(findingReceiver || working || remote.busy)
-      ForEach(devices) { device in
-        Button {
-          Task {
-            working = true
-            receiverMessage = "Connecting to " + device.name + "…"
-            defer { working = false }
-            do {
-              try await remote.linkDevice(device.id)
-              devices = []
-              remote.notify("Linked to " + device.name + ".")
-              dismiss()
-            } catch { receiverMessage = error.localizedDescription }
-          }
-        } label: {
-          VStack(alignment: .leading) {
-            Text("Link " + device.name)
-            if device.model != device.name { Text(device.model).font(.footnote).foregroundStyle(.secondary) }
-            if devices.filter({ $0.name == device.name && $0.model == device.model }).count > 1 {
-              Text("Device ID ending in " + String(device.id.suffix(6))).font(.footnote)
-            }
-          }
-        }.disabled(working || findingReceiver || remote.busy)
+    if let device = remote.receiver?.device {
+      Section {
+        LabeledContent("Current device", value: device.name)
+        LabeledContent("Connection", value: remote.activity)
       }
     }
-    if !receiverMessage.isEmpty { Text(receiverMessage).font(.footnote) }
+    Section {
+      ForEach(devices) { device in
+        let selected = selectedDeviceID == device.id
+        Button {
+          selectedDeviceID = device.id
+          receiverMessage = ""
+        } label: {
+          HStack {
+            VStack(alignment: .leading) {
+              Text(device.name).foregroundStyle(.primary)
+              if device.model != device.name { Text(device.model).font(.footnote).foregroundStyle(.secondary) }
+              if devices.filter({ $0.name == device.name && $0.model == device.model }).count > 1 {
+                Text("Device ID ending in " + String(device.id.suffix(6))).font(.footnote)
+              }
+            }
+            Spacer()
+            Image(systemName: selected ? "checkmark.circle.fill" : "circle").accessibilityHidden(true)
+          }.contentShape(Rectangle())
+        }
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .disabled(working || findingReceiver || remote.busy)
+      }
+      if findingReceiver { ProgressView("Finding devices…") }
+      else {
+        Button("Search for devices", systemImage: "arrow.clockwise") { Task { await locate() } }
+          .disabled(working || remote.busy)
+      }
+    } header: {
+      Text("Devices on your Wi-Fi")
+    } footer: {
+      Text("Turn on your Harman Kardon device and connect your iPhone to the same home network.")
+    }
+  }
+
+  private var connectBar: some View {
+    VStack(spacing: 8) {
+      if !receiverMessage.isEmpty {
+        Text(receiverMessage).font(.footnote).frame(maxWidth: .infinity, alignment: .leading)
+      }
+      Button {
+        guard let selectedDeviceID, !working else { return }
+        working = true
+        Task {
+          defer { working = false }
+          do {
+            try await remote.linkDevice(selectedDeviceID)
+            dismiss()
+          } catch { receiverMessage = error.localizedDescription }
+        }
+      } label: {
+        Text(working ? "Connecting…" : "Connect").frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.borderedProminent)
+      .disabled(selectedDeviceID == nil || findingReceiver || working || remote.busy)
+    }
+    .padding().background(.bar)
   }
 
   private func locate() async {
+    guard !findingReceiver, !working else { return }
     findingReceiver = true
     devices = []
+    selectedDeviceID = nil
     receiverMessage = ""
     defer { findingReceiver = false }
     do {
       devices = try await remote.locateDevices()
-      receiverMessage =
-        devices.isEmpty
-        ? "No stereo found. Turn it on, join your regular home Wi-Fi, and allow Otoha under Settings → Privacy & Security → Local Network. Then tap Locate devices again."
-        : "Choose the device to link."
+      if devices.isEmpty {
+        receiverMessage = "No devices found. Check that Otoha is allowed under Settings → Privacy & Security → Local Network, then search again."
+      }
     } catch { receiverMessage = error.localizedDescription }
   }
 
@@ -251,7 +311,7 @@ private struct InfraredSettings: View {
   @EnvironmentObject private var remote: Remote
   @State private var error = ""
   @State private var confirmForget = false
-  @State private var confirmedHandsetWake = false
+  var skip: (() -> Void)? = nil
   @State private var searchTask: Task<Void, Never>?
 
   private func submit(_ action: String, id: String? = nil) {
@@ -267,14 +327,10 @@ private struct InfraredSettings: View {
     List {
       if let setup = remote.receiver?.infrared, setup.receiverId == receiverId {
         switch setup.phase {
-        case "linked", "broken":
+        case "linked":
           Section {
-            if let message = setup.message {
-              Text(message)
-            } else {
-              LabeledContent("Linked blaster", value: setup.label ?? "IR blaster")
-              Text("Power on now sends the HK 3770’s infrared On signal.")
-            }
+            LabeledContent("Linked blaster", value: setup.label ?? "IR blaster")
+            Text("Power on now sends your receiver’s infrared On signal.")
             Button("Forget blaster", role: .destructive) { confirmForget = true }
               .confirmationDialog("Forget this blaster?", isPresented: $confirmForget) {
                 Button("Forget blaster", role: .destructive) { submit("forget") }
@@ -303,41 +359,57 @@ private struct InfraredSettings: View {
             }
             Button("Search again") { submit("search") }
           }
-        case "idle" where !confirmedHandsetWake:
+        case "readyToLearn":
           Section {
-            Text("First check that volume works from Otoha while your HK 3770 is on. Put the receiver in standby, then try Power on from Otoha while your iPhone is on the same Wi-Fi.")
-            Text("If the receiver stays in standby, try the On button on its original handset.")
-            Button("Wi-Fi wake failed, but the handset worked") { confirmedHandsetWake = true }
+            LabeledContent("Blaster", value: setup.devices?.first?.label ?? "BroadLink RM")
+            Text("Point the receiver’s remote at the blaster. If the remote has an AVR mode, select it first. Tap Learn Power On and wait for the listening prompt.")
+            Button("Learn Power On") { submit("learn") }
+            Button("Choose another blaster") { submit("search") }
+          }
+        case "preparing":
+          ProgressView("Getting the blaster ready…")
+        case "learning":
+          Section {
+            ProgressView("Listening for Power On…")
+            Text("Press the receiver remote’s On button once now.")
           }
         default:
+          let learning = remote.receiver?.device.infraredWake == .learnOn
           Section {
-            Text("An infrared blaster can wake your HK 3770 the same way its original remote does. Plug the blaster in, connect it to your home network, and point it at the front of the stereo.")
+            Text("Connect the blaster to your home Wi-Fi using its manufacturer’s app. Place it where its infrared light can reach the front of your receiver.")
+            if learning {
+              Text("Use a BroadLink RM infrared blaster and have the receiver’s original remote handy to teach it Power On.")
+            }
             DisclosureGroup("Compatible blasters and setup tips") {
-              Text("Choose a BroadLink RM, IRKit, a Nature Remo that supports local control, or a Tasmota IR transmitter.")
-              Text("For BroadLink, turn off Lock device in its app. Tasmota needs Bonjour advertising, local HTTP access and an IRsend pin.")
+              Text("For a BroadLink RM, turn off Lock device in the BroadLink app.")
+              if !learning {
+                Text("You can also use IRKit, a Nature Remo with local control, or a Tasmota IR transmitter with Bonjour, local HTTP access and an IRsend pin.")
+              }
             }
           }
           Section {
-            if let message = setup.message { Text(message).foregroundStyle(.secondary) }
-            Button("Find and link a blaster") { submit("search") }
-            if LocalDiscovery.usesAnnouncements {
+            Button("Find a blaster") { submit("search") }
+            if !learning && LocalDiscovery.usesAnnouncements {
               Button("Find a Global Caché iTach or Flex") { submit("itach") }
               Text("An iTach announces itself about once a minute.").font(.footnote)
             }
           } footer: {
-            Text(
-              "Your iPhone links a single match automatically. Setup sends no power command."
-            )
+            Text("Setup sends no power command.")
           }
         }
       } else {
-        Text("Reconnect to your HK 3770 to manage infrared wake.")
+        Text("Infrared setup is unavailable for this device.")
       }
       if !error.isEmpty { Text(error).foregroundStyle(.secondary) }
     }
     .disabled(remote.busy)
+    .safeAreaInset(edge: .bottom) {
+      if let skip {
+        Button("Not now", action: skip).frame(maxWidth: .infinity).padding().background(.bar)
+      }
+    }
     .onDisappear { searchTask?.cancel() }
-    .navigationTitle(confirmedHandsetWake || remote.receiver?.irWake == true ? "Infrared wake" : "Power on troubleshooting")
+    .navigationTitle("Infrared wake")
     .navigationBarTitleDisplayMode(.inline)
   }
 }

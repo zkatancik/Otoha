@@ -12,7 +12,16 @@ import Foundation
       guard let (url, _) = HarmanNetwork.advertisement(packet) else { fatalError("Missing advertisement") }
       return [try await HarmanNetwork.describe(url)]
     }
-    let remote = Remote(defaults: prefs, discover: search)
+    var interruptFirstSearch: (() -> Void)?
+    let remote = Remote(defaults: prefs, discover: {
+      if let interrupt = interruptFirstSearch {
+        interruptFirstSearch = nil
+        interrupt()
+        return [HKDevice(id: "uuid:old-network", host: host, model: "HK 3770", name: "Old stereo", profile: "stereo")]
+      }
+      return try await search()
+    })
+    interruptFirstSearch = { remote.networkPathChanged() }
     let devices = try await remote.locateDevices()
     precondition(devices.count == 1 && devices[0].name == "Test & Stereo")
     precondition(remote.receiver == nil && !remote.hasPendingInfraredOffer)

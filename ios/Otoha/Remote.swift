@@ -38,7 +38,11 @@ struct Receiver {
   private let defaults: UserDefaults
   private let monitor = NWPathMonitor()
   private var lastPath: NWPath?
-  private var epoch = 0
+  private struct ConnectionEpoch: Equatable {
+    var operation = 0
+    var path = 0
+  }
+  private var epoch = ConnectionEpoch()
   private var refreshing = false
   private var verified = false
   private var lastSearch = Date.distantPast
@@ -73,7 +77,7 @@ struct Receiver {
     monitor.pathUpdateHandler = { [weak self] path in
       Task { @MainActor in
         guard let self else { return }
-        if let lastPath = self.lastPath, lastPath != path { self.disconnected() }
+        if let lastPath = self.lastPath, lastPath != path { self.networkPathChanged() }
         self.lastPath = path
       }
     }
@@ -106,8 +110,17 @@ struct Receiver {
     return result
   }
 
+  func networkPathChanged() {
+    epoch.path += 1
+    resetConnection()
+  }
+
   func disconnected() {
-    epoch += 1
+    epoch.operation += 1
+    resetConnection()
+  }
+
+  private func resetConnection() {
     verified = false
     lastSearch = .distantPast
     found = []
@@ -129,10 +142,22 @@ struct Receiver {
   func locateDevices() async throws -> [HKDevice] {
     guard !busy, volumeStep == nil else { throw RemoteError("Finish the current action and search again.") }
     busy = true
-    epoch += 1
+    epoch.operation += 1
     let version = epoch
     defer { busy = false }
     found = []
+    do {
+      return try await scanDevices(on: version)
+    } catch {
+      try Task.checkCancellation()
+      // A search can start over on a new path while the same operation is active.
+      guard epoch.operation == version.operation, epoch.path != version.path else { throw error }
+      return try await scanDevices(on: epoch)
+    }
+  }
+
+  private func scanDevices(on version: ConnectionEpoch) async throws -> [HKDevice] {
+    try check(version)
     let devices = try await discover()
     try check(version)
     found = devices
@@ -140,7 +165,7 @@ struct Receiver {
     return devices
   }
 
-  private func check(_ version: Int) throws {
+  private func check(_ version: ConnectionEpoch) throws {
     try Task.checkCancellation()
     guard epoch == version else { throw RemoteError("The connection changed. Try again.") }
   }
@@ -150,7 +175,7 @@ struct Receiver {
       throw RemoteError("Search again and choose your stereo.")
     }
     busy = true
-    epoch += 1
+    epoch.operation += 1
     let version = epoch
     defer { busy = false }
     let device: HKDevice?
@@ -216,7 +241,7 @@ struct Receiver {
   private func perform(_ action: String, _ value: String?, state: Receiver) async -> Bool {
     let device = state.device
     guard let profile = HarmanCatalog.shared.profiles[device.profile] else { return false }
-    epoch += 1
+    epoch.operation += 1
     let version = epoch
     var message = "Command sent."
     do {
@@ -285,7 +310,7 @@ struct Receiver {
     }
     busy = true
     defer { busy = false }
-    epoch += 1
+    epoch.operation += 1
     let version = epoch
     let key = "directIR." + device.id
     if action == "forget" {

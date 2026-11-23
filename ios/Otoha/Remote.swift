@@ -17,7 +17,7 @@ struct Receiver {
   let actions: [String]
   var online = false
   var infrared: InfraredStatus?
-  var trackedMode: String?
+  var harmanVolume = HarmanVolume()
   var lastSource: String?
   var model: String { device.model }
   var speaker: Bool { device.profile == "mm" }
@@ -50,7 +50,8 @@ struct Receiver {
   private var foundAt = Date.distantPast
   private var volumeStep: Task<Bool, Never>?
   private var feedbackTask: Task<Void, Never>?
-  private static let modes = ["High", "Low", "Off"]
+  private static let harmanPressInterval = Duration.milliseconds(600)
+  private var nextHarmanPress = ContinuousClock.Instant.now.advanced(by: Remote.harmanPressInterval)
   private static let selectionKey = "directReceiver.v1"
   private static let pendingOfferKey = "pendingInfraredOffer.v1"
 
@@ -102,6 +103,7 @@ struct Receiver {
     guard let profile = HarmanCatalog.shared.profiles[device.profile] else { return nil }
     var result = Receiver(device: device, sources: profile.sources.filter { device.model != "HK 3700" || $0.id != "bluetooth" },
                           actions: profile.keys.keys.filter { device.model == "HK 3770" || $0 != "harman" })
+    if result.actions.contains("harman") { result.harmanVolume = .saved(for: device.id, in: defaults) }
     if device.infraredWake != nil {
       let ir = blaster(for: device)
       let label = ir?.label
@@ -125,7 +127,6 @@ struct Receiver {
     nextRediscovery = .now
     found = []
     receiver?.online = false
-    receiver?.trackedMode = nil
     receiver?.lastSource = nil
     if let device = receiver?.device { receiver?.infrared = snapshot(device)?.infrared }
   }
@@ -264,21 +265,12 @@ struct Receiver {
         guard let target else { throw RemoteError("Couldn’t find this receiver on Wi-Fi to send Power on.") }
         _ = try await HarmanNetwork.transmit(target, packets: [profile.packet(key)])
         message = "Power on sent over Wi-Fi. Check the receiver."
-      } else if action == "sync-mode" || action == "set-mode" {
-        guard device.model == "HK 3770", let value, let target = Self.modes.firstIndex(of: value) else { return false }
-        if action == "set-mode" {
-          guard let mode = receiver?.trackedMode, let from = Self.modes.firstIndex(of: mode), let key = profile.keys["harman"] else {
-            throw RemoteError("Sync the mode with the receiver display first.")
-          }
-          for step in 0..<((target - from + 3) % 3) {
-            if step > 0 { try await Task.sleep(for: .milliseconds(340)) }
-            try check(version)
-            _ = try await HarmanNetwork.transmit(device, packets: [profile.packet(key)])
-          }
-        }
-        try check(version)
-        receiver?.trackedMode = value
-        message = "Tracking " + value + "."
+      } else if action == "harman" || action == "set-mode" {
+        guard state.actions.contains("harman"), let key = profile.keys["harman"] else { return false }
+        let target = value.flatMap(HarmanVolume.Mode.init(rawValue:))
+        guard action != "set-mode" || target != nil else { return false }
+        message = try await changeHarmanVolume(to: action == "set-mode" ? target : nil, state: state,
+                                               packet: profile.packet(key), version: version)
       } else {
         var packets: [Data]
         if action == "source", let source = state.sources.first(where: { $0.id == value }), let wire = source.wire {
@@ -293,23 +285,61 @@ struct Receiver {
         _ = try await HarmanNetwork.transmit(device, packets: packets)
         try check(version)
         if action == "source" { receiver?.lastSource = value }
-        if action == "harman", let mode = receiver?.trackedMode, let from = Self.modes.firstIndex(of: mode) {
-          receiver?.trackedMode = Self.modes[(from + 1) % 3]
-        }
       }
       try check(version)
       if action == "standby" || action == "wake" {
-        receiver?.trackedMode = nil
         receiver?.lastSource = nil
         nextRediscovery = .now
       }
       if action != "louder" && action != "quieter" { pulse += 1; notify(message) }
       return true
     } catch {
-      if ["harman","set-mode"].contains(action) { receiver?.trackedMode = nil }
       notify(error.localizedDescription)
       return false
     }
+  }
+
+  func syncHarmanVolume(_ mode: HarmanVolume.Mode, cycle: HarmanVolume.Cycle, for id: String) -> Bool {
+    guard !busy, let state = receiver, state.online, state.device.id == id, state.actions.contains("harman") else { return false }
+    let volume = HarmanVolume(mode: mode, cycle: cycle)
+    volume.save(for: id, in: defaults)
+    receiver?.harmanVolume = volume
+    // The owner may have just pressed the physical button to read the display.
+    nextHarmanPress = .now.advanced(by: Self.harmanPressInterval)
+    pulse += 1
+    notify("Tracking " + mode.rawValue + ".")
+    return true
+  }
+
+  private func changeHarmanVolume(to target: HarmanVolume.Mode?, state: Receiver, packet: Data,
+                                  version: ConnectionEpoch) async throws -> String {
+    let id = state.device.id
+    var volume = state.harmanVolume
+    var presses = 1
+    if let target {
+      guard let current = volume.mode else { throw RemoteError("Sync the mode with the receiver display first.") }
+      if current == target { return "Tracking " + current.rawValue + "." }
+      presses = volume.cycle.next(after: current) == target ? 1 : 2
+    }
+    for _ in 0..<presses {
+      try await Task.sleep(until: nextHarmanPress, clock: .continuous)
+      try check(version)
+      // A relaunch during the write must not restore the estimate from before this press.
+      let pending = HarmanVolume(mode: nil, cycle: volume.cycle)
+      pending.save(for: id, in: defaults)
+      do {
+        defer { nextHarmanPress = .now.advanced(by: Self.harmanPressInterval) }
+        _ = try await HarmanNetwork.transmit(state.device, packets: [packet])
+        try check(version)
+      } catch {
+        if receiver?.device.id == id { receiver?.harmanVolume = pending }
+        throw RemoteError("Harman Volume press interrupted. Sync with the receiver display.")
+      }
+      volume.mode = volume.mode.map(volume.cycle.next)
+      volume.save(for: id, in: defaults)
+      receiver?.harmanVolume = volume
+    }
+    return volume.mode.map { "Tracking " + $0.rawValue + "." } ?? "Harman Volume cycle sent."
   }
 
   func configureInfrared(_ action: String, receiverId: String, id: String? = nil) async throws {

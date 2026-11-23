@@ -20,6 +20,46 @@ struct HKDevice: Codable, Identifiable {
 
 enum InfraredWakeMethod: String, Decodable { case hk37xx, learnOn }
 
+struct HarmanVolume {
+  enum Mode: String {
+    case high = "High", low = "Low", off = "Off"
+  }
+  enum Cycle: String, CaseIterable {
+    case lowFirst, highFirst
+    static let standard: Self = .lowFirst
+
+    var afterOff: Mode { self == .highFirst ? .high : .low }
+
+    var modes: [Mode] {
+      let second = next(after: .high)
+      return [.high, second, next(after: second)]
+    }
+
+    func next(after mode: Mode) -> Mode {
+      switch mode {
+      case .off: afterOff
+      case .high: self == .highFirst ? .low : .off
+      case .low: self == .lowFirst ? .high : .off
+      }
+    }
+  }
+
+  var mode: Mode?
+  var cycle: Cycle = .standard
+
+  static func saved(for id: String, in defaults: UserDefaults) -> Self {
+    let fields = defaults.dictionary(forKey: "harmanVolume.v1." + id) as? [String: String]
+    guard let cycle = fields?["cycle"].flatMap(Cycle.init(rawValue:)) else { return Self() }
+    return Self(mode: fields?["mode"].flatMap(Mode.init(rawValue:)), cycle: cycle)
+  }
+
+  func save(for id: String, in defaults: UserDefaults) {
+    var fields = ["cycle": cycle.rawValue]
+    fields["mode"] = mode?.rawValue
+    defaults.set(fields, forKey: "harmanVolume.v1." + id)
+  }
+}
+
 struct ReceiverInput: Codable {
   let id, name, detail: String
   var wire: String?

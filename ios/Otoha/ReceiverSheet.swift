@@ -15,6 +15,7 @@ struct ReceiverSheet: View {
   @State private var selectedDeviceID: String?
   @State private var working = false
   @State private var draft: RemoteArrangement
+  @State private var modeCycle: HarmanVolume.Cycle
 
   init(
     panel: Panel, savedPage: RemoteArrangement?, arrangement: RemoteArrangement,
@@ -28,6 +29,7 @@ struct ReceiverSheet: View {
     self.editPage = editPage
     self.savePage = savePage
     _draft = State(initialValue: arrangement)
+    _modeCycle = State(initialValue: equipment?.harmanVolume.cycle ?? .standard)
   }
 
   var body: some View {
@@ -118,15 +120,24 @@ struct ReceiverSheet: View {
           }
         case .mode:
           Section {
-            ForEach(["High", "Low", "Off"], id: \.self) { mode in
-              actionRow(mode, nil, "waveform", "sync-mode", mode)
+            Picker("Mode after Off", selection: $modeCycle) {
+              ForEach(HarmanVolume.Cycle.allCases, id: \.self) { cycle in
+                Text(cycle.afterOff.rawValue).tag(cycle)
+              }
+            }
+          } footer: {
+            Text("If the modes advance in a different order on your receiver, choose the mode one press after Off.")
+          }
+          Section {
+            ForEach(modeCycle.modes, id: \.self) { mode in
+              Button(mode.rawValue) {
+                if let id = equipment?.device.id, remote.syncHarmanVolume(mode, cycle: modeCycle, for: id) { dismiss() }
+              }.disabled(remote.busy || remote.receiver?.online != true)
             }
           } header: {
             Text("Mode on the front display")
           } footer: {
-            Text(
-              "Otoha counts the mode presses it sends from this setting. Sync again after changing the mode with another remote."
-            )
+            Text("Tap the mode you see to save it for this receiver. Otoha tracks its own presses. Sync again if the display changes with another remote.")
           }
         case .power:
           Section {

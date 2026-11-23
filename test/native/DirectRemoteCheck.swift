@@ -2,6 +2,13 @@ import Foundation
 
 @main struct DirectRemoteCheck {
   @MainActor static func main() async throws {
+    if CommandLine.arguments[1] == "--read-saved-mode" {
+      let prefs = UserDefaults(suiteName: CommandLine.arguments[2])!
+      let reopened = Remote(defaults: prefs)
+      precondition(reopened.receiver?.device.id == CommandLine.arguments[3])
+      precondition(reopened.receiver?.harmanVolume.mode?.rawValue == CommandLine.arguments[4])
+      return
+    }
     let host = CommandLine.arguments[1], port = UInt16(CommandLine.arguments[2])!
     let location = URL(string: "http://\(host):\(port)/device.xml")!
     let packet = Datagram(host: host, port: 1900, bytes: Data("HTTP/1.1 200 OK\r\nLOCATION: \(location)\r\n\r\n".utf8))
@@ -35,13 +42,28 @@ import Foundation
     try await remote.linkDevice(devices[0].id)
     precondition(remote.hasPendingInfraredOffer)
     precondition(remote.receiver?.online == true && remote.receiver?.infrared?.phase == "idle")
-    let steps = [("louder", nil), ("source", "usb"), ("sync-mode", "Off"), ("set-mode", "Low")]
+    precondition(remote.receiver?.harmanVolume.mode == nil)
+    precondition(remote.syncHarmanVolume(.off, cycle: .highFirst, for: devices[0].id))
+    let steps = [("louder", nil), ("source", "usb"), ("set-mode", "Off"), ("set-mode", "Low")]
     for (action, value) in steps {
       let sent = await remote.send(action, value)
       precondition(sent, "Failed to send " + action)
     }
-    precondition(remote.receiver?.trackedMode == "Low" && remote.receiver?.lastSource == "usb")
+    precondition(remote.receiver?.harmanVolume.mode == .low && remote.receiver?.lastSource == "usb")
+    let tappedAgain = await remote.send("set-mode", "Off")
+    precondition(tappedAgain)
     let powerState = URL(fileURLWithPath: CommandLine.arguments[5])
+    func waitForDisplay(_ mode: String, at name: String = "display") async throws {
+      let display = powerState.deletingLastPathComponent().appendingPathComponent(name)
+      let deadline = ContinuousClock.now.advanced(by: .seconds(1))
+      while try String(contentsOf: display, encoding: .utf8) != mode {
+        precondition(ContinuousClock.now < deadline, "Receiver missed a Harman Volume press; expected " + mode)
+        try await Task.sleep(for: .milliseconds(10))
+      }
+    }
+    try await waitForDisplay("Off")
+    precondition(Remote(defaults: prefs, discover: search).receiver?.harmanVolume.mode == .off,
+                 "Reopening the app lost the synced Harman Volume mode")
     func setPowerState(_ state: String) throws {
       try Data(state.utf8).write(to: powerState, options: .atomic)
     }
@@ -65,12 +87,13 @@ import Foundation
     let controlsRestored = await remote.send("quieter")
     precondition(controlsRestored)
     let restarted = Remote(defaults: prefs, discover: search)
-    precondition(restarted.receiver?.online == false && restarted.receiver?.trackedMode == nil)
+    precondition(restarted.receiver?.online == false && restarted.receiver?.harmanVolume.mode == .off)
     precondition(restarted.canWake)
     let woke = await restarted.send("wake")
     precondition(woke && restarted.receiver?.online == false)
     await restarted.refresh()
     precondition(restarted.receiver?.online == true && restarted.receiver?.device.id == devices[0].id)
+    precondition(restarted.receiver?.harmanVolume.mode == .off)
 
     let fixture = LocalBlaster(id: "rm-001122334455", label: "BroadLink RM mini 3", kind: .broadlink,
                               host: host, port: UInt16(CommandLine.arguments[3])!, type: 0x2737,
@@ -82,6 +105,49 @@ import Foundation
     _ = try await restarted.locateDevices()
     try await restarted.linkDevice(devices[0].id)
     precondition(!restarted.hasPendingInfraredOffer)
+    precondition(restarted.receiver?.harmanVolume.mode == .off)
+
+    // On the owner's HK 3770, one press from High goes to Off, then Low, then High.
+    try setPowerState("other")
+    let other = try await restarted.locateDevices()[0]
+    try await restarted.linkDevice(other.id)
+    precondition(other.id != devices[0].id && restarted.receiver?.harmanVolume.mode == nil)
+    guard let defaultCycle = restarted.receiver?.harmanVolume.cycle else { fatalError("Missing linked receiver") }
+    precondition(defaultCycle.modes == [.high, .off, .low], "Buttons must follow the observed HK 3770 cycle")
+    precondition(restarted.syncHarmanVolume(.high, cycle: defaultCycle, for: other.id))
+    let selectedOff = await restarted.send("set-mode", "Off")
+    precondition(selectedOff && restarted.receiver?.harmanVolume.mode == .off)
+    try await waitForDisplay("Off", at: "other-display")
+    let cycled = await restarted.send("harman")
+    precondition(cycled && restarted.receiver?.harmanVolume.mode == .low)
+    try await waitForDisplay("Low", at: "other-display")
+    let cycledBack = await restarted.send("set-mode", "High")
+    precondition(cycledBack)
+    try await waitForDisplay("High", at: "other-display")
+    let otherReopened = Remote(defaults: prefs, discover: search)
+    precondition(otherReopened.receiver?.harmanVolume.mode == .high && otherReopened.receiver?.harmanVolume.cycle == .lowFirst)
+    try setPowerState("on")
+    _ = try await restarted.locateDevices()
+    try await restarted.linkDevice(devices[0].id)
+    precondition(restarted.receiver?.harmanVolume.mode == .off && restarted.receiver?.harmanVolume.cycle == .highFirst)
+
+    // Background between two writes. The first press is the last completed step.
+    let changing = Task { await restarted.send("set-mode", "Low") }
+    for _ in 0..<200 where restarted.receiver?.harmanVolume.mode != .high {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    restarted.disconnected()
+    let completed = await changing.value
+    precondition(!completed && restarted.receiver?.harmanVolume.mode == .high)
+    try await waitForDisplay("High")
+    let freshProcess = Process()
+    freshProcess.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
+    freshProcess.arguments = ["--read-saved-mode", suite, devices[0].id, "High"]
+    try freshProcess.run()
+    freshProcess.waitUntilExit()
+    precondition(freshProcess.terminationStatus == 0, "A fresh process lost the completed press")
+    await restarted.refresh()
+    precondition(restarted.receiver?.online == true && restarted.receiver?.harmanVolume.mode == .high)
 
     let signal = Data([0x26, 0, 6, 0, 0x10, 0x11, 0x20, 0x21, 0x40, 0x41])
     var mini = fixture
@@ -150,6 +216,14 @@ import Foundation
         }
       }
     }
-    print("Verified power-cycle reconnection, receiver commands, post-connection offers, per-model eligibility, and BroadLink learning, retry and playback.")
+    _ = try await restarted.locateDevices()
+    try await restarted.linkDevice(devices[0].id)
+    let unplug = location.deletingLastPathComponent().appendingPathComponent("unplug-control")
+    _ = try await LocalHTTP.fetch(URLRequest(url: unplug))
+    let failed = await restarted.send("set-mode", "Low")
+    precondition(!failed && restarted.receiver?.harmanVolume.mode == nil)
+    let afterFailure = Remote(defaults: prefs)
+    precondition(afterFailure.receiver?.device.id == devices[0].id && afterFailure.receiver?.harmanVolume.mode == nil)
+    print("Verified Harman Volume pacing, sync, relaunch, interrupted writes, receiver reconnection and BroadLink control.")
   }
 }

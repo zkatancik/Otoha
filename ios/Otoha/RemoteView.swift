@@ -436,13 +436,13 @@ struct RemoteView: View {
         .accessibilityLabel("Sync Harman Volume with receiver display")
         .disabled(!canControl)
       }
-      if let mode = remote.receiver?.trackedMode, online {
+      if let volume = remote.receiver?.harmanVolume, let mode = volume.mode {
         HStack {
-          ForEach(["High", "Low", "Off"], id: \.self) { option in
+          ForEach(volume.cycle.modes, id: \.self) { option in
             Button {
-              if option != mode { Task { await remote.send("set-mode", option) } }
+              if option != mode { Task { await remote.send("set-mode", option.rawValue) } }
             } label: {
-              Text(option).font(.subheadline.weight(.semibold))
+              Text(option.rawValue).font(.subheadline.weight(.semibold))
                 .frame(maxWidth: .infinity, minHeight: 44, maxHeight: .infinity)
                 .foregroundStyle(option == mode ? Palette.paper : Palette.controlTint)
                 .background(
@@ -450,14 +450,15 @@ struct RemoteView: View {
                   in: RoundedRectangle(cornerRadius: 10))
             }
             .disabled(!canControl)
-            .accessibilityLabel("Harman Volume " + option)
+            .accessibilityLabel("Harman Volume " + option.rawValue)
             .accessibilityAddTraits(option == mode ? [.isSelected] : [])
           }
         }
       } else {
         HStack(spacing: 10) {
           cycle
-          modeOrder.lineLimit(1).minimumScaleFactor(0.65)
+          Text("Sync to select a mode").font(.caption.weight(.medium)).foregroundStyle(Palette.controlTint)
+            .lineLimit(1).minimumScaleFactor(0.65)
         }
       }
     }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(.horizontal, 12).padding(.top, 2)
@@ -469,9 +470,6 @@ struct RemoteView: View {
             width: 126, height: 68)
         }.clipShape(RoundedRectangle(cornerRadius: 20))
       }
-  }
-  private var modeOrder: some View {
-    Text("High · Low · Off").font(.caption.weight(.medium)).foregroundStyle(Palette.controlTint)
   }
   private var cycle: some View {
     Button {

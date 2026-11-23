@@ -8,6 +8,7 @@ import struct
 import subprocess
 import tempfile
 import threading
+import time
 
 root = Path(__file__).resolve().parents[2]
 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as route:
@@ -20,6 +21,12 @@ learned_signal = bytes.fromhex("26 00 06 00 10 11 20 21 40 41")
 
 class Descriptor(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path == "/unplug-control":
+            self.server.control.shutdown()
+            self.server.control.server_close()
+            self.send_response(200)
+            self.end_headers()
+            return
         state = self.server.power_state.read_text()
         if state == "off":
             self.send_error(503)
@@ -40,8 +47,8 @@ class Descriptor(http.server.BaseHTTPRequestHandler):
 
 class Receiver(socketserver.StreamRequestHandler):
     def handle(self):
-        while line := self.rfile.readline():
-            assert line.lower() == b"post avr http/1.1\r\n"
+        while request_line := self.rfile.readline():
+            assert request_line.lower() == b"post avr http/1.1\r\n"
             headers = {}
             while (line := self.rfile.readline()) != b"\r\n":
                 name, value = line.decode().split(":", 1)
@@ -56,6 +63,22 @@ class Receiver(socketserver.StreamRequestHandler):
                 self.wfile.write(b"alive</name></status></common></avr></harman>")
             else:
                 frames.append((key, body.split("<para>")[1].split("</para>")[0]))
+                if key == "harman_volume":
+                    assert request_line == b"POST avr HTTP/1.1\r\n"
+                    assert headers["User-Agent"] == "Harman Remote Controller/1.0"
+                    assert "<zone>Main Zone</zone><para></para>" in body
+                    with self.server.mode_lock:
+                        other = self.server.power_state.read_text() == "other"
+                        display = self.server.displays[other]
+                        now = time.monotonic()
+                        # Simulate a front panel that drops tightly spaced key presses.
+                        if now - self.server.last_press.get(other, 0) >= 0.30:
+                            cycle = ["Off", "Low", "High"] if other else ["Off", "High", "Low"]
+                            current = cycle.index(display.read_text())
+                            temp = display.with_suffix(".new")
+                            temp.write_text(cycle[(current + 1) % len(cycle)])
+                            temp.replace(display)
+                        self.server.last_press[other] = now
 
 
 class Blaster(socketserver.DatagramRequestHandler):
@@ -134,6 +157,12 @@ with tempfile.TemporaryDirectory() as folder, http.server.ThreadingHTTPServer((h
     power_state = Path(folder) / "power-state"
     power_state.write_text("on")
     stereo.power_state = web.power_state = power_state
+    web.control = stereo
+    stereo.mode_lock = threading.Lock()
+    stereo.last_press = {}
+    stereo.displays = {False: Path(folder) / "display", True: Path(folder) / "other-display"}
+    stereo.displays[False].write_text("Off")
+    stereo.displays[True].write_text("High")
     for server in (web, stereo, mini, rm4):
         threading.Thread(target=server.serve_forever, daemon=True).start()
     files = ["HarmanProtocol", "HarmanNetwork", "LocalNetwork", "BroadLink", "LocalInfrared", "Remote"]
@@ -143,8 +172,9 @@ with tempfile.TemporaryDirectory() as folder, http.server.ThreadingHTTPServer((h
                     str(Path(__file__).with_name("DirectRemoteCheck.swift"))], check=True)
     subprocess.run([str(binary), host, str(web.server_port), str(mini.server_address[1]), str(rm4.server_address[1]),
                     str(power_state)], check=True, timeout=45)
-    assert frames == [("volume-up", ""), ("source-selection", "USB"), ("source-selection", "iPod"),
-                      ("harman_volume", ""), ("harman_volume", ""), ("volume-down", ""), ("power-on", "")], frames
+    cycle = [("harman_volume", "")]
+    assert frames == ([("volume-up", ""), ("source-selection", "USB"), ("source-selection", "iPod")] +
+                      cycle * 3 + [("volume-down", ""), ("power-on", "")] + cycle * 4), frames
     import sys
     sys.path.insert(0, str(root / "scripts"))
     from ir_preset import power_on_pulses

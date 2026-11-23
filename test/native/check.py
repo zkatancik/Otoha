@@ -1,14 +1,17 @@
 """Exercise the actual Swift remote against fixtures bound only to this computer's LAN address."""
 import http.server
+import json
 from pathlib import Path
 import shutil
 import socket
 import socketserver
 import struct
 import subprocess
+import sys
 import tempfile
 import threading
 import time
+from urllib.parse import parse_qs, urlsplit
 
 root = Path(__file__).resolve().parents[2]
 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as route:
@@ -21,6 +24,15 @@ learned_signal = bytes.fromhex("26 00 06 00 10 11 20 21 40 41")
 
 class Descriptor(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        url = urlsplit(self.path)
+        if url.path == "/cm":
+            command, = parse_qs(url.query)["cmnd"]
+            self.server.tasmota_commands.append(command)
+            reply = {"GPIO4": {"1056": "IRsend"}} if command == "GPIO 255" else {"IRSend": "Done"}
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(json.dumps(reply).encode())
+            return
         if self.path == "/unplug-control":
             self.server.control.shutdown()
             self.server.control.server_close()
@@ -40,6 +52,13 @@ class Descriptor(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def do_POST(self):
+        assert self.path == "/messages" and self.headers.get_content_type() == "application/json"
+        assert self.headers["X-Requested-With"]
+        self.server.ir_messages.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
+        self.send_response(200)
+        self.end_headers()
 
     def log_message(self, *args):
         pass
@@ -136,6 +155,19 @@ class Blaster(socketserver.DatagramRequestHandler):
         self.wfile.write(reply)
 
 
+class ITach(socketserver.StreamRequestHandler):
+    def handle(self):
+        command = bytearray()
+        for byte in iter(lambda: self.rfile.read(1), b""):
+            if byte != b"\r":
+                command.extend(byte)
+                continue
+            self.server.commands.append(command.decode("ascii"))
+            reply = b"IR,1:1,IR" if command == b"get_IR,1:1" else b"completeir,1:1,1"
+            self.wfile.write(reply + b"\r")
+            command.clear()
+
+
 class TCPFixture(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
@@ -151,9 +183,16 @@ class RMFixture(socketserver.UDPServer):
         self.bad_capture = product == 0x51da
 
 
+def check_pulse_times(emitter, counts, tick_us, expected_us):
+    assert len(counts) == len(expected_us), f"{emitter}: wrong number of pulse durations"
+    for index, (count, target) in enumerate(zip(counts, expected_us)):
+        actual = count * tick_us
+        assert abs(actual - target) <= tick_us / 2, f"{emitter} pulse {index}: {actual:.1f} µs, expected {target} µs"
+
+
 with tempfile.TemporaryDirectory() as folder, http.server.ThreadingHTTPServer((host, 0), Descriptor) as web, \
         TCPFixture((host, 10025), Receiver) as stereo, RMFixture(0x2737, "001122334455") as mini, \
-        RMFixture(0x51da, "0123456789ab") as rm4:
+        RMFixture(0x51da, "0123456789ab") as rm4, TCPFixture((host, 0), ITach) as itach:
     power_state = Path(folder) / "power-state"
     power_state.write_text("on")
     stereo.power_state = web.power_state = power_state
@@ -163,7 +202,10 @@ with tempfile.TemporaryDirectory() as folder, http.server.ThreadingHTTPServer((h
     stereo.displays = {False: Path(folder) / "display", True: Path(folder) / "other-display"}
     stereo.displays[False].write_text("Off")
     stereo.displays[True].write_text("High")
-    for server in (web, stereo, mini, rm4):
+    web.tasmota_commands = []
+    web.ir_messages = []
+    itach.commands = []
+    for server in (web, stereo, mini, rm4, itach):
         threading.Thread(target=server.serve_forever, daemon=True).start()
     files = ["HarmanProtocol", "HarmanNetwork", "LocalNetwork", "BroadLink", "LocalInfrared", "Remote"]
     binary = Path(folder) / "check"
@@ -171,18 +213,40 @@ with tempfile.TemporaryDirectory() as folder, http.server.ThreadingHTTPServer((h
     subprocess.run(["xcrun", "swiftc", "-o", str(binary), *[str(root / f"ios/Otoha/{name}.swift") for name in files],
                     str(Path(__file__).with_name("DirectRemoteCheck.swift"))], check=True)
     subprocess.run([str(binary), host, str(web.server_port), str(mini.server_address[1]), str(rm4.server_address[1]),
-                    str(power_state)], check=True, timeout=45)
+                    str(power_state), str(itach.server_address[1])], check=True, timeout=45)
     cycle = [("harman_volume", "")]
     assert frames == ([("volume-up", ""), ("source-selection", "USB"), ("source-selection", "iPod")] +
                       cycle * 3 + [("volume-down", ""), ("power-on", "")] + cycle * 4), frames
-    import sys
     sys.path.insert(0, str(root / "scripts"))
-    from ir_preset import power_on_pulses
-    wave = bytearray()
-    for pulse in power_on_pulses():
-        ticks = int(pulse / 32.84)
-        wave.extend(bytes([ticks]) if ticks < 256 else b"\0" + struct.pack(">H", ticks))
-    preset = bytes([0x26, 0]) + struct.pack("<H", len(wave)) + wave
-    assert mini.sent == [preset, learned_signal] and rm4.sent == [learned_signal]
+    from ir_preset import power_on_nec_hex, power_on_pulses
+    expected = power_on_pulses()
+    preset, captured = mini.sent
+    assert captured == learned_signal and rm4.sent == [preset, learned_signal]
+    assert preset[:2] == bytes([0x26, 0])
+    assert int.from_bytes(preset[2:4], "little") == len(preset) - 4
+    wave = iter(preset[4:])
+    counts = []
+    for value in wave:
+        counts.append(value or (next(wave) << 8 | next(wave)))
+    check_pulse_times("BroadLink", counts, 1_000_000 / 32768, expected)
     assert mini.actions == [2, 3, 4, 4, 4, 2]
-    assert rm4.actions == [3, 4, 4, 4, 3, 4, 4, 4, 2]
+    assert rm4.actions == [2, 3, 4, 4, 4, 3, 4, 4, 4, 2]
+
+    irkit, remo = web.ir_messages
+    assert (irkit["format"], irkit["freq"]) == ("raw", 38)
+    assert (remo["format"], remo["freq"]) == ("us", 38)
+    check_pulse_times("IRKit", irkit["data"], 0.5, expected[:-1])
+    check_pulse_times("Nature Remo", remo["data"], 1, expected[:-1])
+
+    pin_check, send_pin_check, ir_send = web.tasmota_commands
+    assert pin_check == send_pin_check == "GPIO 255"
+    command, body = ir_send.split(" ", 1)
+    assert command == "IRSend" and json.loads(body) == {
+        "Protocol": "NEC", "Bits": 32, "Data": power_on_nec_hex(), "Repeat": 0}
+
+    get_mode, send_get_mode, send_ir = itach.commands
+    assert get_mode == send_get_mode == "get_IR,1:1"
+    fields = send_ir.split(",")
+    assert fields[:6] == ["sendir", "1:1", "1", "38000", "1", "1"]
+    check_pulse_times("iTach / Flex", [int(n) for n in fields[6:]], 1_000_000 / 38000, expected)
+    print("Verified HK Power On requests for BroadLink, IRKit, Nature Remo, Tasmota and Global Caché.")

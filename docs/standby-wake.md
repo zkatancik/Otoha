@@ -48,6 +48,10 @@ The original remote can wake these systems from full Standby with AC connected a
 
 ## Verifying another unit
 
+For infrared wake, run `python3 test/native/check.py` on a Mac with Xcode. It captures the requests from the iPhone app’s Swift senders. For each raw timing format it checks the full Power On pulse sequence in the emitter’s own units. For Tasmota it checks the NEC command and repeat count that the firmware receives.
+
+To verify a new emitter model on hardware, link the receiver while it is awake, put it in standby, and confirm it goes offline. Send Power On once through the linked emitter. Record the emitter and receiver models, the front-panel response, and how long it takes the same receiver to answer Otoha again. In the HK 3770 and BroadLink RM4 mini test, the receiver went offline for three consecutive checks and answered Otoha about 19 seconds after one corrected IR transmission.
+
 Link and identify the receiver while it is on. With the iPhone on the same Wi-Fi, place the receiver into the specific state being tested. Record the front-panel indication, standby settings, firmware and elapsed time. Attempt Wi-Fi Power On and observe whether the receiver actually turns on. Repeat after any automatic transition to deeper standby. If Wi-Fi fails but the original handset wakes the unit, record that result separately. A missed discovery packet, an outage, an open port or a successful write by itself does not establish a power transition. [Protocol and readback limits](receiver.md#feedback-and-power)
 
 [stereo]: https://support.harmankardon.com/on/demandware.static/-/Sites-masterCatalog_Harman/default/dwc89ee311/pdfs/HK3700_3770_OM_EN.pdf#page=16

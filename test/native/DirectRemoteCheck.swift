@@ -158,6 +158,13 @@ import Foundation
     let rm4 = LocalBlaster(id: "rm-0123456789ab", label: "BroadLink RM4 mini", kind: .broadlink,
                            host: host, port: UInt16(CommandLine.arguments[4])!, type: 0x51da,
                            mac: [1,35,69,103,137,171], locked: false)
+    try await DirectInfrared.operate(rm4, send: true)
+    for kind in [LocalBlaster.Kind.irkit, .remo, .tasmota, .itach] {
+      let blaster = LocalBlaster(id: kind.rawValue, label: kind.rawValue, kind: kind, host: host,
+                                 port: kind == .itach ? UInt16(CommandLine.arguments[6])! : port)
+      try await DirectInfrared.operate(blaster, send: false)
+      try await DirectInfrared.operate(blaster, send: true)
+    }
     let avrURL = location.deletingLastPathComponent().appendingPathComponent("avr.xml")
     let avr = Remote(defaults: prefs, discover: { [try await HarmanNetwork.describe(avrURL)] },
                      discoverBlasters: { itach, learning in

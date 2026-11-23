@@ -15,11 +15,13 @@ struct LocalBlaster: Codable, Identifiable {
 }
 
 enum InfraredSignal {
-  // HK 3700/3770 handset discrete On: NEC1 device 128, subdevice 112, command 192.
-  static let pulses: [Int] = {
+  // HK 3700/3770 discrete On (NEC1 128/112/192), in transmission order, first bit at bit 31.
+  static let powerOnFrame: UInt32 = 0x010E_03FC
+  static let carrierKHz = 38
+  static let pulsesMicroseconds: [Int] = {
     var result = [9024, 4512]
-    for byte in [128, 112, 192, 63] {
-      for bit in 0..<8 { result += [564, byte & (1 << bit) == 0 ? 564 : 1692] }
+    for bit in (0..<32).reversed() {
+      result += [564, powerOnFrame & (1 << bit) == 0 ? 564 : 1692]
     }
     result.append(564)
     result.append(108000 - result.reduce(0, +))
@@ -27,8 +29,9 @@ enum InfraredSignal {
   }()
   static let broadLink: [UInt8] = {
     var wave: [UInt8] = []
-    for pulse in pulses {
-      let ticks = Int(Double(pulse) / 32.84)
+    // BroadLink IR durations are measured in 1/32768-second ticks.
+    for pulse in pulsesMicroseconds {
+      let ticks = Int((Double(pulse) * 32_768 / 1_000_000).rounded())
       if ticks > 255 { wave += [0, UInt8(ticks >> 8)] }
       wave.append(UInt8(truncatingIfNeeded: ticks))
     }
@@ -135,8 +138,11 @@ enum DirectInfrared {
           throw RemoteError("Connect the emitter to output 1 and set it to IR.")
         }
         if send {
-          let cycles = InfraredSignal.pulses.map { String(Int((Double($0) * 0.038).rounded())) }.joined(separator: ",")
-          guard try exchange("sendir,1:1,1,38000,1,1," + cycles) == "completeir,1:1,1" else {
+          let carrierHz = InfraredSignal.carrierKHz * 1000
+          let cycles = InfraredSignal.pulsesMicroseconds.map { us in
+            String(Int((Double(us) * Double(carrierHz) / 1_000_000).rounded()))
+          }.joined(separator: ",")
+          guard try exchange("sendir,1:1,1,\(carrierHz),1,1," + cycles) == "completeir,1:1,1" else {
             throw RemoteError("The blaster didn’t confirm the On signal.")
           }
         }
@@ -174,16 +180,18 @@ enum DirectInfrared {
           String(describing: value).range(of: #"\bIRsend\b"#, options: [.regularExpression,.caseInsensitive]) != nil
       }) else { throw RemoteError("This Tasmota needs an IRsend output.") }
       if send {
-        let response = try await command(#"IRSend {"Protocol":"NEC","Bits":32,"Data":"0x010E03FC","Repeat":0}"#)
+        let frame = String(format: "0x%08X", InfraredSignal.powerOnFrame)
+        let response = try await command(#"IRSend {"Protocol":"NEC","Bits":32,"Data":"\#(frame)","Repeat":0}"#)
         guard response.contains(where: { $0.key.lowercased() == "irsend" && ($0.value as? String)?.lowercased() == "done" }) else { throw RemoteError("Tasmota declined the On signal.") }
       }
     } else if send {
-      let pulses = InfraredSignal.pulses.dropLast().map { device.kind == .irkit ? $0 * 2 : $0 }
+      let pulses = InfraredSignal.pulsesMicroseconds.dropLast().map { device.kind == .irkit ? $0 * 2 : $0 }
       var request = URLRequest(url: base.appendingPathComponent("messages"))
       request.httpMethod = "POST"
       request.setValue("application/json", forHTTPHeaderField: "Content-Type")
       request.setValue("Otoha", forHTTPHeaderField: "X-Requested-With")
-      request.httpBody = try JSONSerialization.data(withJSONObject: ["format": device.kind == .irkit ? "raw" : "us", "freq": 38, "data": pulses])
+      request.httpBody = try JSONSerialization.data(withJSONObject: ["format": device.kind == .irkit ? "raw" : "us",
+                                                                      "freq": InfraredSignal.carrierKHz, "data": pulses])
       _ = try await LocalHTTP.fetch(request)
     } else {
       // Reading /messages would consume a learned code. A TCP connection is sufficient here.

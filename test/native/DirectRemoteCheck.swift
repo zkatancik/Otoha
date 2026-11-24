@@ -19,18 +19,18 @@ import Foundation
       guard let (url, _) = HarmanNetwork.advertisement(packet) else { fatalError("Missing advertisement") }
       return [try await HarmanNetwork.describe(url)]
     }
-    var interruptFirstSearch: (() -> Void)?
+    var interruptNextSearch: (() -> Void)?
     var searches = 0
     let remote = Remote(defaults: prefs, discover: {
       searches += 1
-      if let interrupt = interruptFirstSearch {
-        interruptFirstSearch = nil
+      if let interrupt = interruptNextSearch {
+        interruptNextSearch = nil
         interrupt()
         return [HKDevice(id: "uuid:old-network", host: host, model: "HK 3770", name: "Old stereo", profile: "stereo")]
       }
       return try await search()
     })
-    interruptFirstSearch = { remote.networkPathChanged() }
+    interruptNextSearch = { remote.networkPathChanged() }
     let devices = try await remote.locateDevices()
     precondition(devices.count == 1 && devices[0].name == "Test & Stereo")
     precondition(remote.receiver == nil && !remote.hasPendingInfraredOffer)
@@ -69,8 +69,17 @@ import Foundation
     }
     try setPowerState("off")
     await remote.refresh()
-    precondition(remote.receiver?.online == false)
+    precondition(remote.receiver?.connection == .offline)
+    remote.becameActive()
+    precondition(remote.receiver?.connection == .connecting)
+    interruptNextSearch = {
+      remote.disconnected()
+      remote.becameActive()
+    }
     await remote.refresh()
+    precondition(remote.receiver?.connection == .connecting, "A stale check finished the new foreground check")
+    await remote.refresh()
+    precondition(remote.receiver?.connection == .offline, "An unsuccessful search left the spinner running")
     let searchesWhileOff = searches
     await remote.refresh()
     precondition(searches == searchesWhileOff, "Repeated a network-wide search during standby")
@@ -78,8 +87,9 @@ import Foundation
     await remote.refresh()
     precondition(remote.receiver?.online == false, "Reconnected to another stereo at the saved address")
     try setPowerState("booting")
+    remote.becameActive()
     await remote.refresh()
-    precondition(remote.receiver?.online == false, "Reconnected before the control service was ready")
+    precondition(remote.receiver?.connection == .offline, "A matching descriptor alone did not settle as offline")
     try setPowerState("on")
     await remote.refresh()
     precondition(remote.receiver?.online == true, "The open remote stayed offline after the receiver powered back on")
@@ -87,12 +97,14 @@ import Foundation
     let controlsRestored = await remote.send("quieter")
     precondition(controlsRestored)
     let restarted = Remote(defaults: prefs, discover: search)
-    precondition(restarted.receiver?.online == false && restarted.receiver?.harmanVolume.mode == .off)
+    precondition(restarted.receiver?.connection == .connecting && restarted.receiver?.harmanVolume.mode == .off)
     precondition(restarted.canWake)
     let woke = await restarted.send("wake")
     precondition(woke && restarted.receiver?.online == false)
     await restarted.refresh()
     precondition(restarted.receiver?.online == true && restarted.receiver?.device.id == devices[0].id)
+    restarted.becameActive()
+    precondition(restarted.receiver?.connection == .connected)
     precondition(restarted.receiver?.harmanVolume.mode == .off)
 
     let fixture = LocalBlaster(id: "rm-001122334455", label: "BroadLink RM mini 3", kind: .broadlink,

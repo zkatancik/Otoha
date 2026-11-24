@@ -12,10 +12,17 @@ struct InfraredStatus {
 }
 
 struct Receiver {
+  enum Connection: String {
+    case connecting = "Connecting…"
+    case connected = "Connected"
+    case offline = "Stereo offline"
+  }
+
   let device: HKDevice
   let sources: [ReceiverInput]
   let actions: [String]
-  var online = false
+  var connection: Connection = .connecting
+  var online: Bool { connection == .connected }
   var infrared: InfraredStatus?
   var harmanVolume = HarmanVolume()
   var lastSource: String?
@@ -30,7 +37,6 @@ struct Receiver {
   @Published private(set) var busy = false
   @Published private(set) var feedback: String?
   @Published private(set) var pulse = 0
-  var activity: String { receiver.map { $0.online ? "Connected" : "Stereo offline" } ?? "Choose your stereo" }
   var canWake: Bool { receiver?.actions.contains("wake") == true || receiver?.irWake == true }
 
   private let discover: () async throws -> [HKDevice]
@@ -43,8 +49,7 @@ struct Receiver {
     var path = 0
   }
   private var epoch = ConnectionEpoch()
-  private var refreshing = false
-  private var verified = false
+  private var refreshingEpoch: ConnectionEpoch?
   private var nextRediscovery = ContinuousClock.Instant.now
   private var found: [HKDevice] = []
   private var foundAt = Date.distantPast
@@ -122,11 +127,16 @@ struct Receiver {
     resetConnection()
   }
 
+  func becameActive() {
+    guard receiver?.online == false else { return }
+    receiver?.connection = .connecting
+    nextRediscovery = .now
+  }
+
   private func resetConnection() {
-    verified = false
     nextRediscovery = .now
     found = []
-    receiver?.online = false
+    if receiver?.online == true { receiver?.connection = .offline }
     receiver?.lastSource = nil
     if let device = receiver?.device { receiver?.infrared = snapshot(device)?.infrared }
   }
@@ -135,9 +145,8 @@ struct Receiver {
     guard var state = snapshot(device) else { throw RemoteError("This model isn’t supported.") }
     let bytes = try JSONEncoder().encode(device)
     if defaults.data(forKey: Self.selectionKey) != bytes { defaults.set(bytes, forKey: Self.selectionKey) }
-    state.online = true
+    state.connection = .connected
     receiver = state
-    verified = true
   }
 
   func locateDevices() async throws -> [HKDevice] {
@@ -198,17 +207,22 @@ struct Receiver {
   }
 
   func refresh() async {
-    guard !busy, volumeStep == nil, !refreshing, let saved = receiver?.device else { return }
-    refreshing = true
-    defer { refreshing = false }
     let version = epoch
-    if verified {
-      let online = await HarmanNetwork.online(saved)
+    guard !busy, volumeStep == nil, refreshingEpoch != version, let state = receiver else { return }
+    refreshingEpoch = version
+    defer {
+      if refreshingEpoch == version { refreshingEpoch = nil }
+      if version == epoch, !Task.isCancelled, receiver?.connection == .connecting {
+        receiver?.connection = .offline
+      }
+    }
+    if state.online {
+      let online = await HarmanNetwork.online(state.device)
       guard version == epoch, !Task.isCancelled else { return }
       if !online { disconnected() }
       return
     }
-    guard let match = await identify(saved, throttleDiscovery: true), version == epoch, !Task.isCancelled,
+    guard let match = await identify(state.device, throttleDiscovery: true), version == epoch, !Task.isCancelled,
           await HarmanNetwork.online(match), version == epoch, !Task.isCancelled else { return }
     try? accept(match)
   }

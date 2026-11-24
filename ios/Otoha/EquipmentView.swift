@@ -31,10 +31,25 @@ struct OtohaSignature: View {
   }
 }
 
+struct ConnectionLabel: View {
+  let connection: Receiver.Connection
+  var showsStatusLight = false
+
+  var body: some View {
+    HStack(spacing: 5) {
+      if connection == .connecting {
+        ProgressView().controlSize(.mini).accessibilityHidden(true)
+      } else if showsStatusLight {
+        Circle().fill(connection == .connected ? Color(red: 0.06, green: 0.29, blue: 0.14) : .black.opacity(0.5))
+          .frame(width: 6, height: 6).accessibilityHidden(true)
+      }
+      Text(connection.rawValue)
+    }
+  }
+}
+
 struct EquipmentPlate: View {
   let receiver: Receiver
-  let status: String
-  let online: Bool
   let compact: Bool
 
   var body: some View {
@@ -110,11 +125,9 @@ struct EquipmentPlate: View {
   }
 
   private var statusLight: some View {
-    HStack(spacing: 5) {
-      Circle().fill(online ? Color(red: 0.06, green: 0.29, blue: 0.14) : .black.opacity(0.5))
-        .frame(width: 6, height: 6)
-      Text(status).font(.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.72)
-    }
+    ConnectionLabel(connection: receiver.connection, showsStatusLight: true)
+      .font(.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.72)
+      .tint(.black.opacity(0.75))
   }
 
   private var portraits: some View {

@@ -160,11 +160,12 @@ struct RemoteView: View {
       if connected && remote.hasPendingInfraredOffer { offerSetup() }
     }
     .sensoryFeedback(.impact(weight: .light), trigger: remote.pulse)
+    .onChange(of: scene, initial: true) { _, phase in
+      if phase == .background { remote.disconnected() }
+      if phase == .active { remote.becameActive() }
+    }
     .task(id: scene) {
-      guard scene == .active else {
-        if scene == .background { remote.disconnected() }
-        return
-      }
+      guard scene == .active else { return }
       while !Task.isCancelled {
         await remote.refresh()
         try? await Task.sleep(for: .seconds(5))
@@ -251,7 +252,7 @@ struct RemoteView: View {
   }
 
   private func header(_ device: Receiver, height: CGFloat) -> some View {
-    EquipmentPlate(receiver: device, status: remote.activity, online: online, compact: height < 125)
+    EquipmentPlate(receiver: device, compact: height < 125)
       .frame(height: max(1, height))
   }
 

@@ -57,13 +57,10 @@ struct ReceiverSheet: View {
             }
           }
         case .frontPage:
-          if let equipment {
+          if let equipment = remote.receiver {
             Section {
-              EquipmentPlate(
-                receiver: equipment, status: remote.activity,
-                online: remote.receiver?.online == true, compact: true
-              )
-              .frame(height: 90).listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
+              EquipmentPlate(receiver: equipment, compact: true)
+                .frame(height: 90).listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
             }
             Section {
               ForEach(RemoteModule.available(for: equipment)) { module in
@@ -217,10 +214,10 @@ struct ReceiverSheet: View {
         Button("Customize remote", systemImage: "slider.horizontal.3", action: editPage)
       }
     }
-    if let device = remote.receiver?.device {
+    if let receiver = remote.receiver {
       Section {
-        LabeledContent("Current device", value: device.name)
-        LabeledContent("Connection", value: remote.activity)
+        LabeledContent("Current device", value: receiver.device.name)
+        LabeledContent("Connection") { ConnectionLabel(connection: receiver.connection) }
       }
     }
     Section {
